@@ -1,3 +1,4 @@
+"""AI answer suggestions for task questions, drawn only from verified answers and shared notes."""
 import json
 from typing import Annotated
 from uuid import UUID
@@ -7,34 +8,13 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import text
 
 from app.main import program_connection
-from app.planner import Provider, ProviderError
-from app.workflow import Actor, QuestionInput, task_scope
+from app.core.ai_provider import Provider, ProviderError
+from app.core.deps import Actor
+from app.routes.tasks import task_scope
 
 from app.ai_control import mark_invalid, metered_provider
 
 router = APIRouter(prefix="/api/organizations/{org_id}/tasks/{task_id}/questions")
-
-
-@router.get("")
-def task_questions(org_id: UUID, task_id: UUID, actor: Actor):
-    with program_connection(actor, org_id) as connection:
-        task_scope(connection, org_id, task_id)
-        rows = connection.execute(text("""
-            select id,title,body from app.questions where org_id=:org and task_id=:task
-            order by created_at desc,id limit 50
-        """), {"org": org_id, "task": task_id}).mappings()
-        return [dict(row) for row in rows]
-
-
-@router.post("", status_code=201)
-def ask_task(org_id: UUID, task_id: UUID, actor: Actor, data: QuestionInput):
-    with program_connection(actor, org_id) as connection:
-        task_scope(connection, org_id, task_id)
-        identifier = connection.execute(text("""
-            insert into app.questions(org_id,task_id,author_id,title,body)
-            values (:org,:task,:actor,:title,:body) returning id
-        """), {"org": org_id, "task": task_id, "actor": actor, **data.model_dump()}).scalar_one()
-        return {"id": identifier}
 
 
 class SuggestionPart(BaseModel):

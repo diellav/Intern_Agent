@@ -200,14 +200,14 @@ def create_program(org_id: UUID, data: ProgramInput, user_id: Annotated[UUID, De
             raise HTTPException(409, "A program with this name already exists")
         return Program.model_validate(dict(row))
 
-from app.workflow import router as workflow_router
-from app.planner import router as planner_router
+from app.routes import assignments, calendar, notifications, overview, questions, tasks
+from app.plans import crud as plans_crud, generate as plans_generate
 from app.files import router as files_router
 from app.notes import router as notes_router
 from app.review_assist import router as review_router
 
-app.include_router(workflow_router)
-app.include_router(planner_router)
+for module in (assignments, tasks, notifications, questions, overview, calendar, plans_crud, plans_generate):
+    app.include_router(module.router)
 app.include_router(files_router)
 app.include_router(notes_router)
 app.include_router(review_router)
@@ -223,8 +223,8 @@ app.include_router(progress_router)
 from app.attention import router as attention_router
 app.include_router(attention_router)
 
-from app.task_questions import router as task_questions_router
-app.include_router(task_questions_router)
+from app.question_assist import router as question_assist_router
+app.include_router(question_assist_router)
 
 from app.ai_control import router as ai_control_router
 app.include_router(ai_control_router)

@@ -8,8 +8,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import actor_id, app  # import first: app.main wires the routers
-from app import planner, workflow
-from app.planner import GenerateInput, GroqProvider, ProviderError, planner_provider, validate_proposal
+from app.core import deps
+from app.plans import generate as plan_generate
+from app.core.ai_provider import GroqProvider, ProviderError, planner_provider
+from app.plans.schemas import GenerateInput
+from app.plans.validate import validate_proposal
 
 OPEN_A, OPEN_B, DONE = uuid4(), uuid4(), uuid4()
 CONTEXT = {
@@ -207,10 +210,10 @@ def client(monkeypatch):
     def no_database(user_id, org_id, admin=False):
         yield None
 
-    monkeypatch.setattr(workflow, "program_connection", no_database)
+    monkeypatch.setattr(deps, "program_connection", no_database)
     from app.ai_control import MeteredProvider
     monkeypatch.setattr(MeteredProvider, "complete", lambda self, *args: self.provider.complete(*args))
-    monkeypatch.setattr(planner, "collect_context", lambda *args: CONTEXT)
+    monkeypatch.setattr(plan_generate, "collect_context", lambda *args: CONTEXT)
     monkeypatch.setitem(app.dependency_overrides, actor_id, lambda: uuid4())
     yield TestClient(app)
     app.dependency_overrides.pop(planner_provider, None)

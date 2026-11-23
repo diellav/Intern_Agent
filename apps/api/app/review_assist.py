@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import text
 
-from app import workflow
+from app.core import deps
+from app.routes.tasks import task_scope
 from app.main import actor_id
-from app.planner import Provider, ProviderError, _clip
+from app.core.ai_provider import Provider, ProviderError, clip
 
 from app.ai_control import mark_invalid, metered_provider
 
@@ -85,8 +86,8 @@ def _host(url: str) -> str:
 @router.post("/tasks/{task_id}/review-assist")
 def review_assist(org_id: UUID, task_id: UUID, actor: Actor, data: AssistInput,
                   provider: Annotated[Provider | None, Depends(metered_provider)]) -> Assist:
-    with workflow.program_connection(actor, org_id) as c:
-        task = workflow.task_scope(c, org_id, task_id)
+    with deps.program_connection(actor, org_id) as c:
+        task = task_scope(c, org_id, task_id)
         if task["mentor_id"] != actor:
             raise HTTPException(403, "Only the assigned mentor can ask for review suggestions.")
         detail = c.execute(text("select title, criteria from app.tasks where id=:id"), {"id": task_id}).mappings().one()
@@ -104,14 +105,14 @@ def review_assist(org_id: UUID, task_id: UUID, actor: Actor, data: AssistInput,
     if provider is None:
         raise HTTPException(503, "AI suggestions are not configured on the server.")
     payload = {
-        "task": {"title": detail["title"], "criteria": _clip(detail["criteria"], 1500)},
+        "task": {"title": detail["title"], "criteria": clip(detail["criteria"], 1500)},
         "version_under_review": {
-            "version": current["version"], "description": _clip(current["evidence"], 3000) or "",
+            "version": current["version"], "description": clip(current["evidence"], 3000) or "",
             # Only names and hosts: file contents and linked pages are never sent.
             "links": [{"title": link["title"] or None, "host": _host(link["url"])} for link in links],
             "files": [{"name": f["file_name"], "type": f["content_type"], "size_kb": round(f["size_bytes"] / 1024)} for f in files],
         },
-        "earlier_versions": [{"version": row["version"], "decision": row["decision"], "mentor_feedback": _clip(row["feedback"], 500)}
+        "earlier_versions": [{"version": row["version"], "decision": row["decision"], "mentor_feedback": clip(row["feedback"], 500)}
                              for row in rows if row["version"] < current["version"]][:3],
     }
     messages = [{"role": "system", "content": PROMPT}, {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]

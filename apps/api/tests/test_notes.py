@@ -9,7 +9,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import actor_id, app, settings  # import first: app.main wires the routers
-from app import planner, workflow
+from app.core import deps
+from app.plans import context
 
 
 @pytest.mark.skipif(os.environ.get("INTERNAGENT_DB_TEST") != "1", reason="opt-in PostgreSQL rollback test")
@@ -46,7 +47,7 @@ def test_note_visibility_search_and_ai_context(monkeypatch):
                         raise HTTPException(404)
                     yield connection
 
-            monkeypatch.setattr(workflow, "program_connection", scoped)
+            monkeypatch.setattr(deps, "program_connection", scoped)
             monkeypatch.setitem(app.dependency_overrides, actor_id, lambda: actor)
             with TestClient(app) as client:
                 notes = f"/api/organizations/{org}/internships/{internship}/notes"
@@ -77,7 +78,7 @@ def test_note_visibility_search_and_ai_context(monkeypatch):
 
                 # The AI context only ever contains shared notes.
                 with scoped(mentor, org) as c:
-                    assert [n["note"] for n in planner.shared_notes(c, internship)] == ["Great progress on the forms this week."]
+                    assert [n["note"] for n in context.shared_notes(c, internship)] == ["Great progress on the forms this week."]
 
                 actor = mentor
                 assert client.put(f"{notes}/{shared['id']}", json={"body": "Great progress on the forms.", "visibility": "private"}).status_code == 200

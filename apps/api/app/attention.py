@@ -7,8 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import text
 
 from app.main import program_connection
-from app.planner import Provider, ProviderError
-from app.workflow import Actor
+from app.core.ai_provider import Provider, ProviderError
+from app.core.deps import Actor
 
 from app.ai_control import mark_invalid, metered_provider
 
@@ -44,7 +44,7 @@ def signals(org_id, actor, internship_id=None):
                 from (select version, decision from app.submissions
                       where task_id=t.id order by version desc limit :return_limit) latest
             ) recent on true
-            where i.org_id=:org and (cast(:internship as uuid) is null or i.id=:internship)
+            where i.org_id=:org and i.closed_at is null and (cast(:internship as uuid) is null or i.id=:internship)
                 and current_date between i.starts_on and i.ends_on
                 and (m.role='admin' or (m.role='mentor' and i.mentor_id=:actor))
             order by i.id,t.due_on,t.id

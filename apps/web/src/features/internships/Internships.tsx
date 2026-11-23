@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useResource, type Call, type Role } from '../../lib/api'
 import type { Navigate, View } from '../../app/Workspace'
 import { formatView } from '../../app/routes'
-import { Due, Empty, ErrorNote, Icon, Loading, Modal, Person, Progress, StatusBadge, displayName, formatDate } from '../../ui'
+import { Due, Empty, ErrorNote, Icon, Loading, Modal, Person, Progress, StatusBadge, confirmAction, displayName, formatDate } from '../../ui'
 import { Plans } from '../plans/Plans'
 import { Notes } from '../notes/Notes'
 import { Activity } from './Activity'
@@ -14,6 +14,7 @@ export type Internship = {
   id: string; program_id: string; program_name: string; starts_on: string; ends_on: string
   mentor_id: string; intern_id: string; mentor_email: string | null; intern_email: string | null
   mentor_name?: string | null; intern_name?: string | null
+  closed_at?: string | null
   task_count: number; completed_count: number; submitted_count: number; changes_count: number; planned_count: number
 }
 type StatusFilter = 'all' | Task['status']
@@ -57,7 +58,7 @@ function AssignDialog({ open, call, base, onClose, onSaved }: { open: boolean; c
 }
 
 function AddTaskDialog({ open, call, base, internship, onClose, onSaved }: { open: boolean; call: Call; base: string; internship: Internship; onClose: () => void; onSaved: () => void }) {
-  return <Modal open={open} onClose={onClose} title="Add task" description={`For ${displayName(internship.intern_name, internship.intern_email)} · ${internship.program_name}`}>
+  return <Modal open={open} onClose={onClose} title="Add task" description={`For ${displayName(internship.intern_name, internship.intern_email)} · ${internship.program_name}. It joins the published plan that covers its deadline.`}>
     <ActionForm call={call} path={`${base}/internships/${internship.id}/tasks`} onSaved={() => { onSaved(); onClose() }} label="Assign task" busyLabel="Assigning task…" icon="plus">
       <label>Task title<input name="title" required maxLength={120} autoFocus placeholder="Build the login screen" /></label>
       <label>Acceptance criteria<textarea name="criteria" rows={4} required maxLength={3000} placeholder="What does done look like?" /></label>
@@ -86,7 +87,7 @@ function InternshipHeader({ internship, role, back, children }: {
       <div><dt>Program</dt><dd>{internship.program_name}</dd></div>
       {showIntern && role === 'admin' && <div><dt>Mentor</dt><dd>{displayName(internship.mentor_name, internship.mentor_email)}</dd></div>}
       <div><dt>Period</dt><dd>{formatDate(internship.starts_on)} – {formatDate(internship.ends_on)}</dd></div>
-      <div><dt>Progress</dt><dd>{periodText(internship.starts_on, internship.ends_on)}</dd></div>
+      <div><dt>Progress</dt><dd>{internship.closed_at ? `Closed ${formatDate(internship.closed_at.slice(0, 10))}` : periodText(internship.starts_on, internship.ends_on)}</dd></div>
     </dl>
   </header>
 }
@@ -108,8 +109,9 @@ function TaskList({ call, base, internship, role, tasks, reload, openTask }: {
         {filters.filter(([key]) => key === 'all' || count(key) > 0).map(([key, label]) =>
           <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<span className="seg-count">{count(key)}</span></button>)}
       </div>
-      {role === 'mentor' && <button className="secondary sm" onClick={() => setAdding(true)}><Icon name="plus" size={15} />Add task</button>}
+      {role === 'mentor' && !internship.closed_at && <button className="secondary sm" onClick={() => setAdding(true)}><Icon name="plus" size={15} />Add task</button>}
     </header>
+    {internship.closed_at && <p className="notice">This internship is closed. Tasks and submissions are read-only.</p>}
     {role === 'mentor' && <AddTaskDialog open={adding} call={call} base={base} internship={internship} onClose={() => setAdding(false)} onSaved={reload} />}
     {tasks.error && <ErrorNote message={tasks.error} onRetry={tasks.reload} />}
     {!records && !tasks.error && <Loading />}
@@ -125,6 +127,32 @@ function TaskList({ call, base, internship, role, tasks, reload, openTask }: {
       </button>
     </li>)}</ul>
   </section>
+}
+
+/** Admins and the assigned mentor close an internship when it ends; it then leaves the active lists. */
+function CloseButton({ call, base, internship, onChanged }: { call: Call; base: string; internship: Internship; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const closed = !!internship.closed_at
+  async function toggle() {
+    const ok = await confirmAction(closed
+      ? 'Reopen this internship? The intern can submit work and you can plan again.'
+      : 'Close this internship? No new tasks, plans or submissions, and it leaves the overview, calendar and attention lists. You can reopen it later.',
+      closed ? 'Reopen' : 'Close internship', !closed)
+    if (!ok) return
+    setBusy(true); setError('')
+    try {
+      await call(`${base}/internships/${internship.id}/closed`, { method: 'PUT', body: JSON.stringify({ closed: !closed }) })
+      onChanged()
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Could not change the internship.')
+    } finally { setBusy(false) }
+  }
+  return <div className="close-control">
+    <button className={closed ? 'secondary sm' : 'secondary sm danger-btn'} disabled={busy} onClick={toggle}>
+      <Icon name={closed ? 'arrow' : 'check'} size={15} />{busy ? 'Saving…' : closed ? 'Reopen internship' : 'Close internship'}</button>
+    {error && <span role="alert" className="fine error-text">{error}</span>}
+  </div>
 }
 
 function InternshipPage({ call, orgId, base, internship, role, view, navigate, showBack, onChanged }: {
@@ -157,6 +185,7 @@ function InternshipPage({ call, orgId, base, internship, role, view, navigate, s
         <span><b>{done}</b> of {total} tasks done</span>
         <Progress done={done} total={total} />
       </div>}
+      {role !== 'intern' && <CloseButton call={call} base={base} internship={internship} onChanged={onChanged} />}
     </InternshipHeader>
     <nav className="tabs" aria-label="Internship sections">
       {tabs.map(([key, label]) => <button key={key} aria-current={section === key ? 'page' : undefined} onClick={() => go({ section: key })}>{label}</button>)}
@@ -166,7 +195,7 @@ function InternshipPage({ call, orgId, base, internship, role, view, navigate, s
       : section === 'notes' ? <Notes call={call} base={base} internshipId={internship.id} role={role} />
       : section === 'plan' ? <Plans intern={role === "intern"} call={call} orgId={orgId} path={`${base}/internships/${internship.id}/plans`}
         internLabel={displayName(internship.intern_name, internship.intern_email)}
-        starts={internship.starts_on} ends={internship.ends_on} mentor={role === 'mentor'}
+        starts={internship.starts_on} ends={internship.ends_on} mentor={role === 'mentor' && !internship.closed_at}
         tasks={tasks.data ?? []} refreshTasks={reload} openTask={taskId => go({ section: 'tasks', taskId })}
         taskHref={(taskId, version) => formatView({ tab: 'internships', internshipId: internship.id, section: 'tasks', taskId, version: version ?? undefined })} />
       : <TaskList call={call} base={base} internship={internship} role={role} tasks={tasks} reload={reload} openTask={taskId => go({ section: 'tasks', taskId })} />}
@@ -219,7 +248,8 @@ export function Internships({ call, orgId, role, view, navigate, manage = false 
         <span className="cell progress-cell">{item.task_count > 0
           ? <><Progress done={item.completed_count} total={item.task_count} /><span className="muted">{item.completed_count}/{item.task_count}</span></>
           : <span className="muted">No tasks yet</span>}</span>
-        <span className="row-state">{item.submitted_count > 0 && <span className="pill warn">{item.submitted_count} to review</span>}</span>
+        <span className="row-state">{item.closed_at ? <span className="pill">Closed</span>
+          : item.submitted_count > 0 && <span className="pill warn">{item.submitted_count} to review</span>}</span>
       </button>
     </li>)}</ul>
   </section>

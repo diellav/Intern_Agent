@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import text
 
-from app import workflow
+from app.core import deps
+from app.routes.tasks import task_scope
 from app.main import actor_id
 from app.storage import Storage, StorageError, file_storage
 
@@ -59,8 +60,8 @@ def _purge_staged(connection, storage: Storage, task_id: UUID, actor: UUID) -> N
 
 
 def _stage(org_id: UUID, task_id: UUID, actor: UUID, name: str, content_type: str, data: bytes, storage: Storage) -> dict:
-    with workflow.program_connection(actor, org_id) as c:
-        task = workflow.task_scope(c, org_id, task_id)
+    with deps.program_connection(actor, org_id) as c:
+        task = task_scope(c, org_id, task_id)
         if task["intern_id"] != actor:
             raise HTTPException(403, "Only the assigned intern can add files.")
         if task["status"] not in ("planned", "changes_requested"):
@@ -91,7 +92,7 @@ def _stage(org_id: UUID, task_id: UUID, actor: UUID, name: str, content_type: st
 
 @router.get("/uploads/status")
 def upload_status(org_id: UUID, actor: Actor, storage: Annotated[Storage | None, Depends(file_storage)]):
-    with workflow.program_connection(actor, org_id):
+    with deps.program_connection(actor, org_id):
         pass
     return {"configured": storage is not None, "max_bytes": MAX_BYTES, "extensions": sorted(TYPES)}
 
@@ -122,8 +123,8 @@ async def upload_file(org_id: UUID, task_id: UUID, actor: Actor, request: Reques
 def discard_file(org_id: UUID, task_id: UUID, file_id: UUID, actor: Actor,
                  storage: Annotated[Storage | None, Depends(file_storage)]):
     store = _storage(storage)
-    with workflow.program_connection(actor, org_id) as c:
-        workflow.task_scope(c, org_id, task_id)
+    with deps.program_connection(actor, org_id) as c:
+        task_scope(c, org_id, task_id)
         path = c.execute(text("""
             delete from app.submission_files where id=:id and task_id=:task and submission_id is null and uploaded_by=:actor
             returning storage_path
@@ -140,7 +141,7 @@ def discard_file(org_id: UUID, task_id: UUID, file_id: UUID, actor: Actor,
 @router.get("/files/{file_id}/url")
 def file_url(org_id: UUID, file_id: UUID, actor: Actor, storage: Annotated[Storage | None, Depends(file_storage)]):
     store = _storage(storage)
-    with workflow.program_connection(actor, org_id) as c:
+    with deps.program_connection(actor, org_id) as c:
         # Row-level security limits this to files of tasks the actor can read, in this organization.
         row = c.execute(text("""
             select f.storage_path, f.file_name from app.submission_files f

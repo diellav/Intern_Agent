@@ -6,10 +6,10 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from app.planner import Provider, ProviderError
+from app.core.ai_provider import Provider, ProviderError
 
 from app.main import program_connection
-from app.workflow import Actor
+from app.core.deps import Actor
 
 from app.ai_control import mark_invalid, metered_provider
 

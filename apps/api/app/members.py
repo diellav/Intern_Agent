@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.main import program_connection, settings
-from app.workflow import Actor
+from app.core.deps import Actor
 
 router = APIRouter(prefix="/api/organizations/{org_id}/members")
 

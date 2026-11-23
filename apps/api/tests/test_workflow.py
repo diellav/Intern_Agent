@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import actor_id, app, settings
-from app import workflow
+from app.core import deps
 
 
 @pytest.mark.skipif(os.environ.get("INTERNAGENT_DB_TEST") != "1", reason="opt-in PostgreSQL rollback test")
@@ -42,7 +42,7 @@ def test_assignment_submission_and_review(monkeypatch):
                         raise HTTPException(403)
                     yield connection
 
-            monkeypatch.setattr(workflow, "program_connection", scoped)
+            monkeypatch.setattr(deps, "program_connection", scoped)
             monkeypatch.setitem(app.dependency_overrides, actor_id, lambda: actor)
             with TestClient(app) as client:
                 base = f"/api/organizations/{org}"
@@ -82,8 +82,8 @@ def test_assignment_submission_and_review(monkeypatch):
                 assert response.status_code == 201, response.text
                 existing_task = response.json()["id"]
                 task_path = f"{base}/tasks/{existing_task}"
-                from app import task_questions
-                monkeypatch.setattr(task_questions, "program_connection", scoped)
+                from app import question_assist
+                monkeypatch.setattr(question_assist, "program_connection", scoped)
                 question_path = task_path + "/questions"
                 actor = intern
                 question = client.post(question_path, json={"title": "Validate required fields", "body": "Which fields must I validate?"})
@@ -160,7 +160,8 @@ def test_assignment_submission_and_review(monkeypatch):
                 mentor_notice = mentor_notices[0]["id"]
                 actor = intern
                 intern_notices = client.get(inbox).json()
-                assert {item["event"] for item in intern_notices} == {"assigned", "changes_requested", "completed", "plan_published"}
+                # Publishing drops the 'assigned' notices raised in the same transaction; here that includes the setup task.
+                assert {item["event"] for item in intern_notices} == {"changes_requested", "completed", "plan_published"}
                 assert client.post(f"{inbox}/{mentor_notice}/read").status_code == 404
                 read_path = f'{inbox}/{intern_notices[0]["id"]}/read'
                 first_read = client.post(read_path)
@@ -196,7 +197,7 @@ def test_assignment_submission_and_review(monkeypatch):
 def test_ai_draft_edit_publish_flow(monkeypatch):
     import json as jsonlib
     from datetime import date, timedelta
-    from app.planner import planner_provider
+    from app.core.ai_provider import planner_provider
 
     engine = create_engine(settings().migration_database_url)
     mentor, other_mentor, intern, other_intern, outsider = [uuid4() for _ in range(5)]
@@ -249,16 +250,16 @@ def test_ai_draft_edit_publish_flow(monkeypatch):
                         raise HTTPException(404)
                     yield connection
 
-            from app import ai_control, cv, progress, task_questions
+            from app import ai_control, cv, progress, question_assist
             from io import BytesIO
             from zipfile import ZipFile
 
-            for module in (ai_control, cv, progress, task_questions):
+            for module in (ai_control, cv, progress, question_assist):
                 monkeypatch.setattr(module, "program_connection", scoped)
             monkeypatch.setattr(settings(), "ai_requests_per_hour", 1)
             fake = Fake()
             provider = {"value": None}
-            monkeypatch.setattr(workflow, "program_connection", scoped)
+            monkeypatch.setattr(deps, "program_connection", scoped)
             monkeypatch.setitem(app.dependency_overrides, actor_id, lambda: actor)
             monkeypatch.setitem(app.dependency_overrides, planner_provider, lambda: provider["value"])
             with TestClient(app) as client:
@@ -400,10 +401,9 @@ def test_ai_draft_edit_publish_flow(monkeypatch):
                 visible = client.get(plans).json()
                 assert [item["id"] for item in visible] == [plan["id"]] and visible[0]["published_at"]
                 notices = client.get(f"{base}/notifications").json()
-                # The setup task also produced an "assigned" notice. All share this transaction's timestamp, so compare as a set.
-                assert {(n["event"], n["title"]) for n in notices} == {
-                    ("assigned", "Add validation tests for the contact form"), ("assigned", "Validate the form"),
-                    ("plan_published", "Next week")}
+                # One notice for the published plan instead of one per task. The setup task shares this test's single
+                # transaction, so its 'assigned' notice is dropped too; in production it was sent earlier and stays.
+                assert {(n["event"], n["title"]) for n in notices} == {("plan_published", "Next week")}
 
                 # A plan that only carries existing work still notifies the intern, once.
                 actor = mentor
@@ -417,7 +417,7 @@ def test_ai_draft_edit_publish_flow(monkeypatch):
                 published = [n for n in client.get(f"{base}/notifications").json() if n["event"] == "plan_published"]
                 assert sorted(n["title"] for n in published) == ["Carry only", "Next week"]
                 assert all(n["plan_id"] and n["task_id"] is None for n in published)
-                assert client.get(f"{base}/notifications/unread-count").json()["unread"] == 4
+                assert client.get(f"{base}/notifications/unread-count").json()["unread"] == 2  # the two plan notices
         finally:
             tx.rollback()
     engine.dispose()
@@ -518,8 +518,8 @@ def test_member_role_changes_and_invite(monkeypatch):
 def test_attention_signals_and_question_sources(monkeypatch):
     import json as jsonlib
     from datetime import date, timedelta
-    from app import ai_control, attention, task_questions
-    from app.planner import planner_provider
+    from app import ai_control, attention, question_assist
+    from app.core.ai_provider import planner_provider
 
     engine = create_engine(settings().migration_database_url)
     mentor, intern, quiet_intern, other_mentor, other_intern = [uuid4() for _ in range(5)]
@@ -570,7 +570,7 @@ def test_attention_signals_and_question_sources(monkeypatch):
                     connection.execute(text("select set_config('internagent.actor_id',:actor,true)"), {"actor": str(user_id)})
                     yield connection
 
-            for module in (ai_control, attention, task_questions, workflow):
+            for module in (ai_control, attention, question_assist, deps):
                 monkeypatch.setattr(module, "program_connection", scoped)
             monkeypatch.setattr(settings(), "ai_requests_per_hour", 10)
 
@@ -612,5 +612,83 @@ def test_attention_signals_and_question_sources(monkeypatch):
                 assert suggested.status_code == 200, suggested.text
                 assert [s["id"] for s in suggested.json()["parts"][0]["sources"]] == [answers["org"]]
                 assert "(other)" not in provider["value"].messages[1]["content"]
+        finally:
+            tx.rollback()
+
+
+@pytest.mark.skipif(os.environ.get("INTERNAGENT_DB_TEST") != "1", reason="opt-in PostgreSQL rollback test")
+def test_plan_publish_single_tasks_and_closing(monkeypatch):
+    engine = create_engine(settings().migration_database_url)
+    admin, mentor, intern = [uuid4() for _ in range(3)]
+    org, program = uuid4(), uuid4()
+    actor = admin
+    with engine.connect() as connection:
+        tx = connection.begin()
+        try:
+            for user in (admin, mentor, intern):
+                connection.execute(text("insert into auth.users (id, email) values (:id,:email)"), {"id": user, "email": f"{user}@example.test"})
+            connection.execute(text("insert into app.organizations(id,slug,name) values (:id,:slug,'Flow verification')"), {"id": org, "slug": str(org)})
+            for user, role in [(admin, "admin"), (mentor, "mentor"), (intern, "intern")]:
+                connection.execute(text("insert into app.memberships(org_id,user_id,role) values (:org,:id,:role)"), {"org": org, "id": user, "role": role})
+            connection.execute(text("insert into app.programs(id,org_id,name) values (:id,:org,'Verification')"), {"id": program, "org": org})
+            connection.execute(text("grant internagent_runtime to postgres with set true"))
+            connection.execute(text("set local role internagent_runtime"))
+
+            @contextmanager
+            def scoped(user_id, org_id, admin=False):
+                with connection.begin_nested():
+                    connection.execute(text("select set_config('internagent.actor_id',:actor,true)"), {"actor": str(user_id)})
+                    yield connection
+
+            monkeypatch.setattr(deps, "program_connection", scoped)
+            monkeypatch.setitem(app.dependency_overrides, actor_id, lambda: actor)
+            with TestClient(app) as client:
+                base = f"/api/organizations/{org}"
+                internship = client.post(base + "/internships", json={
+                    "program_id": str(program), "mentor_id": str(mentor), "intern_id": str(intern),
+                    "starts_on": "2026-11-01", "ends_on": "2026-12-01"}).json()["id"]
+                tasks_path = f"{base}/internships/{internship}/tasks"
+                task = lambda title, due: {"title": title, "criteria": "Done when reviewed.", "due_on": due}  # noqa: E731
+
+                actor = mentor
+                early = client.post(tasks_path, json=task("Early work", "2026-11-03")).json()
+                assert early["plan"] is None  # no published plan yet
+                plans_path = f"{base}/internships/{internship}/plans"
+                plan = client.post(plans_path, json={"title": "Week two", "goal": "Forms.", "starts_on": "2026-11-10",
+                                                     "ends_on": "2026-11-20", "carry": [early["id"]],
+                                                     "new_tasks": [task("Form", "2026-11-15"), task("Tests", "2026-11-18")]}).json()
+                published = client.post(f"{plans_path}/{plan['id']}/publish", json={"revision": 1}).json()
+                new_ids = set(published["task_ids"]) - {early["id"]}
+
+                actor = intern
+                notices = client.get(base + "/notifications").json()
+                assert [n["event"] for n in notices].count("plan_published") == 1
+                assert not [n for n in notices if n["event"] == "assigned" and n["task_id"] in new_ids]
+                due = {t["id"]: t["due_on"] for t in client.get(tasks_path).json()}
+                assert due[early["id"]] == "2026-11-20"  # overdue carried work moved to the plan's end
+
+                actor = mentor
+                single = client.post(tasks_path, json=task("Extra", "2026-11-12")).json()
+                assert single["plan"]["id"] == plan["id"]
+                assert single["id"] in client.get(plans_path).json()[0]["task_ids"]
+
+                actor = intern
+                question = client.post(f"{base}/tasks/{single['id']}/questions", json={"title": "Scope?", "body": "Which form?"})
+                assert question.status_code == 201
+                assert client.get(base + "/questions").json()[0]["task_id"] == single["id"]
+                closed_path = f"{base}/internships/{internship}/closed"
+                assert client.put(closed_path, json={"closed": True}).status_code == 403
+
+                actor = mentor
+                assert client.put(closed_path, json={"closed": True}).json()["closed_at"]
+                assert client.get(base + "/overview").json()["counts"]["open"] == 0
+                assert client.post(tasks_path, json=task("Late", "2026-11-25")).status_code == 409
+                actor = intern
+                submit = client.post(f"{base}/tasks/{single['id']}/submissions", json={"evidence": "Done."})
+                assert submit.status_code == 409
+                actor = admin
+                assert client.put(closed_path, json={"closed": False}).json()["closed_at"] is None
+                actor = intern
+                assert client.post(f"{base}/tasks/{single['id']}/submissions", json={"evidence": "Done."}).status_code == 201
         finally:
             tx.rollback()

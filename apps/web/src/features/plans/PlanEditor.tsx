@@ -97,7 +97,7 @@ export function PlanEditor({ draft, setDraft, notes, setNotes, workload, warning
         {carried.length === 0 && <p className="fine">No open tasks carried into this plan.</p>}
         {carried.map(task => <div key={task.id} className="plan-task carried">
           <label className="check-line"><input type="checkbox" checked onChange={() => toggle(task.id, false)} />
-            <span className="grow"><b>{task.title}</b><span className="fine">Due {formatDate(task.due_on)}{notes?.carry[task.id]?.hours ? ` · ${notes.carry[task.id].hours} h left` : ''}</span></span></label>
+            <span className="grow"><b>{task.title}</b><span className="fine">Due {formatDate(task.due_on)}{task.status !== 'completed' && draft.ends_on && task.due_on < draft.starts_on ? ` → moves to ${formatDate(draft.ends_on)} when approved` : ''}{notes?.carry[task.id]?.hours ? ` · ${notes.carry[task.id].hours} h left` : ''}</span></span></label>
           <Why note={notes?.carry[task.id]} taskHref={taskHref} />
         </div>)}
         {available.length > 0 && <details className="more-options">

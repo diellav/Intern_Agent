@@ -11,8 +11,9 @@ from sqlalchemy import text
 
 from app.ai_control import mark_invalid, metered_provider
 from app.main import program_connection
-from app.planner import Provider, ProviderError
-from app.workflow import Actor, assignment
+from app.core.ai_provider import Provider, ProviderError
+from app.core.deps import Actor
+from app.routes.assignments import assignment
 
 router = APIRouter(prefix="/api/organizations/{org_id}/internships/{internship_id}/cv")
 MAX_BYTES = 5 * 1024 * 1024

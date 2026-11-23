@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
 from app.main import actor_id, app, settings  # import first: app.main wires the routers
-from app import workflow
+from app.core import deps
 from app.storage import file_storage
 
 
@@ -71,7 +71,7 @@ def test_files_links_versions_and_access(monkeypatch):
 
             from app import ai_control
             monkeypatch.setattr(ai_control, "program_connection", scoped)
-            monkeypatch.setattr(workflow, "program_connection", scoped)
+            monkeypatch.setattr(deps, "program_connection", scoped)
             monkeypatch.setitem(app.dependency_overrides, actor_id, lambda: actor)
             monkeypatch.setitem(app.dependency_overrides, file_storage, lambda: configured["value"])
             with TestClient(app) as client:
@@ -123,7 +123,7 @@ def test_files_links_versions_and_access(monkeypatch):
 
                 # Review assistant on version 2: names and hosts only, never file bytes or full URLs.
                 import json as jsonlib
-                from app.planner import planner_provider
+                from app.core.ai_provider import planner_provider
 
                 class FakeAI:
                     model = "simulated"

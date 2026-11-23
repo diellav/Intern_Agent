@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.main import program_connection, settings
-from app.planner import Actor, Provider, planner_provider
+from app.core.ai_provider import Provider, planner_provider
+from app.core.deps import Actor
 
 router = APIRouter(prefix="/api/organizations/{org_id}/ai")
 
