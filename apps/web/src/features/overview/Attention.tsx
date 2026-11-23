@@ -1,7 +1,7 @@
 import { AiVote } from '../ai/AiUsage'
 import { useState } from 'react'
 import { useResource, type Call } from '../../lib/api'
-import { ErrorNote } from '../../ui'
+import { ErrorNote, Icon, formatDate } from '../../ui'
 
 type Signal = {
   kind: 'overdue' | 'returns' | 'inactivity'; internship_id: string; program: string; checked_on: string; count: number
@@ -16,8 +16,8 @@ export function Attention({ call, orgId, openTask }: { call: Call; orgId: string
   // Quiet when everything is on track: nothing to explain, nothing to show.
   if (result.data && result.data.length === 0) return null
   return <section className="feature-panel feature-stack">
-    <header className="panel-head"><div><h2>Interns who may need help{result.data ? <span className="count">{result.data.length}</span> : null}</h2>
-      <p>Shown for: 2+ open tasks past their deadline, a task returned for changes twice in a row, or 5+ days without a submission.</p></div></header>
+    <header className="panel-head"><div><h2>Needs attention{result.data ? <span className="count">{result.data.length}</span> : null}</h2>
+      <p>Each card shows one reason to check in with an intern.</p></div></header>
     {result.error ? <ErrorNote message={result.error} onRetry={result.reload} /> : !result.data
       ? <p role="status" className="muted">Checking internship activity…</p>
       : result.data.map(signal => <SignalRow key={signal.internship_id + signal.kind}
@@ -53,15 +53,20 @@ function SignalRow({ signal, call, path, openTask }: { signal: Signal; call: Cal
     }
   }
   return <article className="feature-result signal-card" data-kind={signal.kind}>
-    <h3>{(signal.intern_name || signal.intern_email || 'Unnamed intern') + ' · ' + signal.program}</h3>
-    <p>{describe(signal)} · Checked {signal.checked_on}</p>
-    {signal.evidence.length > 0 && <ul>{signal.evidence.map(item =>
+    <header className="signal-heading">
+      <span className="signal-symbol"><Icon name={signal.kind === 'overdue' ? 'clock' : signal.kind === 'returns' ? 'refresh' : 'calendar'} size={20} /></span>
+      <div><h3>{signal.kind === 'overdue' ? 'Overdue tasks' : signal.kind === 'returns' ? 'Repeated changes requested' : 'No recent submissions'}</h3>
+        <span className="signal-person">{(signal.intern_name || signal.intern_email || 'Unnamed intern') + ' · ' + signal.program}</span></div>
+      <span className="signal-count">{signal.kind === "inactivity" ? plural(signal.count, "day") : plural(signal.count, "task")}</span>
+    </header>
+    <p className="signal-description">{describe(signal)}.</p>
+    {signal.evidence.length > 0 && <details className="signal-evidence"><summary>View {signal.kind === "returns" ? "affected tasks and versions" : "overdue tasks"}<Icon name="arrow" size={14} /></summary><ul>{signal.evidence.map(item =>
       <li key={item.task_id + item.version}><button className="link-btn" type="button"
         onClick={() => openTask(signal.internship_id, item.task_id, item.version)}>
-        {item.title}{item.version ? ' · Version ' + item.version : ' · Due ' + item.due_on}
-      </button></li>)}</ul>}
-    <div><button className="secondary sm" type="button" disabled={busy} onClick={explain}>{busy ? 'Preparing suggestion…' : 'Suggest next step'}</button></div>
+        {item.title}{item.version ? ' · Version ' + item.version : ' · Due ' + formatDate(item.due_on)}
+      </button></li>)}</ul></details>}
+    <footer className="signal-footer"><span className="fine">Checked {formatDate(signal.checked_on)}</span><button className="secondary sm" type="button" disabled={busy} onClick={explain}>{busy ? <><span className="btn-spinner dark" />Preparing suggestion…</> : <><Icon name="sparkle" size={14} />Get AI guidance</>}</button></footer>
     {error && <p role="alert">{error}</p>}
-    {step && <><p role="status">{step.next_step}</p><AiVote key={step.ai_usage_id} call={call} org={path.split("/")[3]} id={step.ai_usage_id} /></>}
+    {step && <div className="signal-guidance"><span className="label">Suggested next step</span><p role="status">{step.next_step}</p><AiVote key={step.ai_usage_id} call={call} org={path.split("/")[3]} id={step.ai_usage_id} /></div>}
   </article>
 }

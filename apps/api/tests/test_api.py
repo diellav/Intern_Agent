@@ -49,3 +49,9 @@ def test_fresh_token_survives_small_clock_difference(monkeypatch):
         with pytest.raises(HTTPException) as error:
             check(bad)
         assert error.value.status_code == 401
+
+
+def test_retired_question_routes_are_unavailable():
+    from app.main import app
+    paths = app.openapi()["paths"]
+    assert not any("/questions" in path or "/answers" in path for path in paths)

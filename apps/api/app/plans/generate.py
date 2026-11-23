@@ -16,6 +16,7 @@ from app.ai_control import mark_invalid, metered_provider
 from app.core import deps
 from app.core.ai_provider import Provider, ProviderError, clip, planner_provider
 from app.core.deps import Actor
+from app.jira.sync import refresh_jira
 from app.plans.context import _tasks, collect_context
 from app.plans.crud import plan_parent
 from app.plans.prompt import SYSTEM_PROMPT
@@ -57,6 +58,7 @@ def generate_plan(org_id: UUID, internship_id: UUID, actor: Actor, data: Generat
                   provider: Annotated[Provider | None, Depends(metered_provider)]) -> GeneratedDraft:
     if data.starts_on > data.ends_on:
         raise HTTPException(422, "The end date must follow the start date.")
+    refresh_jira(actor, org_id, internship_id)  # outside the transaction: may call Jira
     # Read the context in a short transaction; the provider call happens without a database connection.
     with deps.program_connection(actor, org_id) as connection:
         context = collect_context(connection, org_id, internship_id, actor, data)

@@ -71,7 +71,18 @@ export function App() {
       <p>Add the Supabase URL and publishable key to the frontend environment.</p>
     </section>
       : session === undefined ? <section className="auth-card state" role="status"><Brand /><span className="spinner" /><p>Checking your session…</p></section>
-      : !session ? <SignIn />
+      : !session ? <div className="sign-in-layout">
+        <aside className="sign-in-story">
+          <span className="sign-in-label">AnchorzUp · Mentorship workspace</span>
+          <h2>A place for<br />work to grow.</h2>
+          <div className="sign-in-flow">
+            <span><Icon name="layers" size={19} />Plan the next step</span>
+            <span><Icon name="file" size={19} />Share the work</span>
+            <span><Icon name="check" size={19} />Learn from feedback</span>
+          </div>
+        </aside>
+        <SignIn />
+      </div>
       : <section className="auth-card state">
         <Brand />
         {memberships?.length === 0 ? <>

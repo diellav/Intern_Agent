@@ -58,7 +58,7 @@ function MembersPanel({ call, orgId, userId }: Props) {
       JSON.stringify({ role }), 'PUT')
   }
 
-  return <section className="card">
+  return <section className="panel member-directory">
     <div className="section-head"><h2>Organization members</h2>
       <button onClick={() => { setError(''); setOpen(true) }}>Invite member</button>
     </div>
@@ -66,10 +66,10 @@ function MembersPanel({ call, orgId, userId }: Props) {
     {members.error && <ErrorNote message={members.error} onRetry={members.reload} />}
     {error && !open && !removing && <ErrorNote message={error} />}
     {!members.data && !members.error && <Loading />}
-    <ul className="rows">{members.data?.map(member => <li className="row flex flex-wrap gap-3" key={member.id}>
+    <ul className="rows">{members.data?.map(member => <li className="member-row" key={member.id}>
       <div className="row-main"><strong>{member.full_name || member.email}</strong>
         {member.full_name && <span className="fine break-all">{member.email}</span>}
-        <span className="capitalize">{member.role} · {member.status}</span>
+        <span className="member-status" data-status={member.status}>{member.status}</span>
       </div>
       {member.status !== 'inactive' && <label className="fine">Role
         <select aria-label={`Role for ${member.full_name || member.email}`} value={member.role}

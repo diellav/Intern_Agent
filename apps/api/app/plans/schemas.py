@@ -36,6 +36,7 @@ class ProposedTask(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
     estimated_hours: float | None = None
     evidence_refs: list[str] = Field(default_factory=list, max_length=10)
+    jira_key: str | None = None  # an open Jira issue this task works on; unknown keys are dropped later
 
 
 class Proposal(BaseModel):
@@ -57,6 +58,7 @@ class DraftTask(BaseModel):
     criteria: str
     due_on: date
     estimated_hours: float | None = None
+    jira_key: str | None = None
 
 
 class Draft(BaseModel):
@@ -119,6 +121,7 @@ def proposal_schema(open_refs: list[str]) -> dict:
             "due_on": {"type": "string", "description": "YYYY-MM-DD"},
             "reason": {"type": "string"},
             "estimated_hours": hours,
+            "jira_key": {"type": ["string", "null"], "description": "key from project.open_jira_issues, or null"},
             "evidence_refs": refs,
         })},
     })

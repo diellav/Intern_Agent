@@ -2,7 +2,7 @@ import type { FormEvent, ReactNode } from 'react'
 import { formatDate, Icon } from '../../ui'
 
 export type PlanTask = { id: string; title: string; due_on: string; status: string; estimated_hours?: number | null }
-export type NewTask = { title: string; criteria: string; due_on: string; estimated_hours?: number | null }
+export type NewTask = { title: string; criteria: string; due_on: string; estimated_hours?: number | null; jira_key?: string | null }
 export type Draft = { title: string; goal: string; project: string; starts_on: string; ends_on: string; carry: string[]; new_tasks: NewTask[] }
 export type Evidence = { task_id: string; title: string; version: number | null; review: string | null }
 export type ItemNote = { reason: string; hours: number | null; evidence: Evidence[]; confirm: string[] }
@@ -115,6 +115,8 @@ export function PlanEditor({ draft, setDraft, notes, setNotes, workload, warning
           const update = (fields: Partial<NewTask>) => setDraft({ ...draft, new_tasks: draft.new_tasks.map((item, position) => position === index ? { ...item, ...fields } : item) })
           return <div className="plan-task" key={index}>
             <Why note={notes?.new_tasks[index]} taskHref={taskHref} />
+            {task.jira_key && <p className="fine"><span className="pill muted-pill">{task.jira_key}</span> Jira issue this task works on
+              <button type="button" className="link-btn" onClick={() => update({ jira_key: null })}>Unlink</button></p>}
             <label>Task title<input required maxLength={120} value={task.title} onChange={e => update({ title: e.target.value })} /></label>
             <label>Acceptance criteria<textarea required maxLength={3000} rows={3} value={task.criteria} onChange={e => update({ criteria: e.target.value })} /></label>
             <div className="plan-dates">

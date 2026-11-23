@@ -144,8 +144,8 @@ def publish_plan(org_id: UUID, internship_id: UUID, plan_id: UUID, actor: Actor,
         task_ids = list(inputs.carry)
         for task in inputs.new_tasks:
             task_ids.append(connection.execute(text("""
-                insert into app.tasks(internship_id,title,criteria,due_on,estimated_hours)
-                values (:parent,:title,:criteria,:due_on,:estimated_hours) returning id
+                insert into app.tasks(internship_id,title,criteria,due_on,estimated_hours,jira_key)
+                values (:parent,:title,:criteria,:due_on,:estimated_hours,:jira_key) returning id
             """), {"parent":internship_id,**task.model_dump()}).scalar_one())
         row = connection.execute(text("""
             update app.plans set published_at=now(),task_ids=:tasks where id=:id returning *

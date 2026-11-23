@@ -18,6 +18,7 @@ class AssignmentInput(BaseModel):
     intern_id: UUID
     starts_on: date
     ends_on: date
+    project_id: UUID | None = None
 
 
 
@@ -32,7 +33,7 @@ def internships(org_id: UUID, actor: Actor, program_id: UUID | None = None):
     # Row-level security limits the rows to internships the actor may see.
     with deps.program_connection(actor, org_id) as c:
         rows = c.execute(text("""
-            select i.id, i.program_id, i.mentor_id, i.intern_id, i.starts_on, i.ends_on, i.closed_at,
+            select i.id, i.program_id, i.mentor_id, i.intern_id, i.starts_on, i.ends_on, i.closed_at, i.project_id, pr.name as project_name,
                 p.name as program_name, people.mentor_email, people.intern_email, people.mentor_name, people.intern_name,
                 count(t.id) as task_count,
                 count(t.id) filter (where t.status = 'completed') as completed_count,
@@ -41,10 +42,11 @@ def internships(org_id: UUID, actor: Actor, program_id: UUID | None = None):
                 count(t.id) filter (where t.status = 'planned') as planned_count
             from app.internships i
             join app.programs p on p.id = i.program_id
+            left join app.projects pr on pr.id = i.project_id
             left join app.internship_people(:org) people on people.internship_id = i.id
             left join app.tasks t on t.internship_id = i.id
             where i.org_id = :org and (cast(:program as uuid) is null or i.program_id = :program)
-            group by i.id, p.name, people.mentor_email, people.intern_email, people.mentor_name, people.intern_name
+            group by i.id, p.name, pr.name, people.mentor_email, people.intern_email, people.mentor_name, people.intern_name
             order by i.starts_on desc, i.id
         """), {"org": org_id, "program": program_id}).mappings()
         return [dict(row) for row in rows]
@@ -61,9 +63,12 @@ def assign(org_id: UUID, actor: Actor, data: AssignmentInput):
         program = c.execute(text("select id from app.programs where org_id=:org and id=:program"), {"org": org_id, "program": data.program_id}).scalar()
         if program is None:
             raise HTTPException(404, "Program not found.")
+        if data.project_id and not c.execute(text("select 1 from app.projects where org_id=:org and id=:id"),
+                                             {"org": org_id, "id": data.project_id}).first():
+            raise HTTPException(404, "Project not found.")
         result = c.execute(text("""
-            insert into app.internships (org_id, program_id, mentor_id, intern_id, starts_on, ends_on)
-            values (:org, :program_id, :mentor_id, :intern_id, :starts_on, :ends_on)
+            insert into app.internships (org_id, program_id, mentor_id, intern_id, starts_on, ends_on, project_id)
+            values (:org, :program_id, :mentor_id, :intern_id, :starts_on, :ends_on, :project_id)
             on conflict (program_id, intern_id, starts_on) do nothing returning id
         """), {"org": org_id, **data.model_dump()}).scalar()
         if result is None:

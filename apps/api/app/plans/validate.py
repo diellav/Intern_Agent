@@ -65,6 +65,7 @@ def validate_proposal(raw: str, context: dict, data: GenerateInput) -> tuple[Dra
 
     existing = {_key(row["title"]) for row in open_tasks.values()}
     seen: set[str] = set()
+    linked: set[str | None] = set(context.get("jira_taken", ()))
     new_tasks: list[DraftTask] = []
     new_notes: list[ItemNote] = []
     for task in proposal.new_tasks:
@@ -77,7 +78,13 @@ def validate_proposal(raw: str, context: dict, data: GenerateInput) -> tuple[Dra
         seen.add(_key(task.title))
         estimate = hours(task.estimated_hours, task.title)
         cited = evidence(task.evidence_refs)
-        new_tasks.append(DraftTask(title=task.title, criteria=task.criteria, due_on=task.due_on, estimated_hours=estimate))
+        jira_key = task.jira_key
+        if jira_key and (jira_key not in context.get("jira_open", ()) or jira_key in linked):
+            warnings.append(f"Removed the Jira link {jira_key} from “{task.title}”: it is not an open issue of the project, or it is already used.")
+            jira_key = None
+        linked.add(jira_key)
+        new_tasks.append(DraftTask(title=task.title, criteria=task.criteria, due_on=task.due_on, estimated_hours=estimate,
+                                   jira_key=jira_key))
         new_notes.append(ItemNote(reason=task.reason, hours=estimate, evidence=cited, confirm=confirm(cited, estimate)))
 
     if not carry and not new_tasks:

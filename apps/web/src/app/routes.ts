@@ -1,5 +1,5 @@
-export type Tab = 'overview' | 'internships' | 'calendar' | 'plans' | 'reviews' | 'notes' | 'questions'
-  | 'ai-usage' | 'progress' | 'members' | 'programs' | 'assignments' | 'notifications'
+export type Tab = 'overview' | 'internships' | 'calendar' | 'plans' | 'reviews' | 'notes'
+  | 'ai-usage' | 'progress' | 'members' | 'programs' | 'projects' | 'assignments' | 'notifications'
 export type InternshipSection = 'tasks' | 'plan' | 'notes' | 'activity'
 /** Where the workspace is pointed. Kept in the URL hash so links, refresh and Back all work. */
 export type View = {
@@ -9,10 +9,9 @@ export type View = {
   taskId?: string
   version?: number  // submission version to highlight on a task page
   programId?: string
-  source?: string
 }
 
-const tabs: Tab[] = ['overview', 'internships', 'calendar', 'plans', 'reviews', 'notes', 'questions', 'ai-usage', 'progress', 'programs', 'assignments', 'members', 'notifications']
+const tabs: Tab[] = ['overview', 'internships', 'calendar', 'plans', 'reviews', 'notes', 'ai-usage', 'progress', 'programs', 'projects', 'assignments', 'members', 'notifications']
 const sections: InternshipSection[] = ['tasks', 'plan', 'notes', 'activity']
 
 export function parseView(hash: string): View {
@@ -20,7 +19,6 @@ export function parseView(hash: string): View {
   const params = new URLSearchParams(query)
   const [tab, internshipId, section, taskId] = path.split('/').filter(Boolean)
   if (!tabs.includes(tab as Tab)) return { tab: 'overview' }
-  if (tab === 'questions') return { tab, source: params.get('source') ?? undefined }
   if (tab !== 'internships') return { tab: tab as Tab }
   const programId = params.get('program') ?? undefined
   if (!internshipId) return { tab, programId }

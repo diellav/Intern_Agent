@@ -1,11 +1,10 @@
-import { TaskQuestions } from './TaskQuestions'
 import { useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { useResource, type Call, type Role } from '../../lib/api'
 import { Due, ErrorNote, Icon, Loading, StatusBadge, formatDate } from '../../ui'
 import { SubmissionForm, fileSize } from './SubmissionForm'
 import { ReviewAssist, type Assist } from './ReviewAssist'
 
-export type Task = { id: string; title: string; criteria: string; due_on: string; status: 'planned' | 'submitted' | 'changes_requested' | 'completed'; estimated_hours?: number | null }
+export type Task = { id: string; title: string; criteria: string; due_on: string; status: 'planned' | 'submitted' | 'changes_requested' | 'completed'; estimated_hours?: number | null; jira_key?: string | null }
 type SubmissionFile = { id: string; file_name: string; size_bytes: number; content_type: string }
 type Submission = {
   id: string; version: number; evidence: string; feedback: string | null; decision: string | null; submitted_at: string
@@ -176,8 +175,6 @@ export function TaskDetail({ call, base, task, role, highlight, onSaved, neighbo
         {role === 'mentor' && task.status === 'changes_requested' && <p className="empty-line">Waiting for the intern’s next version.</p>}
         {role === 'intern' && task.status === 'submitted' && <p className="empty-line">Sent. Waiting for your mentor’s review.</p>}
       </section>
-
-      <TaskQuestions key={path} call={call} base={base} taskId={task.id} role={role} />
 
       <section className="panel">
         <header className="panel-head"><h2>{canReview ? 'Earlier versions' : 'Versions'}{history && <span className="count">{history.length}</span>}</h2></header>

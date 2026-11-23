@@ -7,6 +7,8 @@ import { Plans } from '../plans/Plans'
 import { Notes } from '../notes/Notes'
 import { Activity } from './Activity'
 import { ActionForm, TaskDetail, type Task } from './TaskDetail'
+import type { Project } from '../projects/Projects'
+import { InternJira } from '../jira/InternJira'
 
 type Program = { id: string; name: string }
 type Member = { id: string; email: string; full_name?: string | null; role: 'mentor' | 'intern' }
@@ -15,6 +17,7 @@ export type Internship = {
   mentor_id: string; intern_id: string; mentor_email: string | null; intern_email: string | null
   mentor_name?: string | null; intern_name?: string | null
   closed_at?: string | null
+  project_id?: string | null; project_name?: string | null
   task_count: number; completed_count: number; submitted_count: number; changes_count: number; planned_count: number
 }
 type StatusFilter = 'all' | Task['status']
@@ -34,6 +37,7 @@ function periodText(starts: string, ends: string) {
 function AssignDialog({ open, call, base, onClose, onSaved }: { open: boolean; call: Call; base: string; onClose: () => void; onSaved: () => void }) {
   const programs = useResource<Program[]>(call, open ? base + '/programs' : null)
   const people = useResource<Member[]>(call, open ? base + '/assignment-members' : null)
+  const projects = useResource<Project[]>(call, open ? base + '/projects' : null)
   const mentors = people.data?.filter(person => person.role === 'mentor')
   const interns = people.data?.filter(person => person.role === 'intern')
   const failure = programs.error || people.error
@@ -50,6 +54,9 @@ function AssignDialog({ open, call, base, onClose, onSaved }: { open: boolean; c
       <div className="form-grid two">
         <label>Mentor<select name="mentor_id" required>{mentors.map(item => <option key={item.id} value={item.id}>{label(item)}</option>)}</select></label>
         <label>Intern<select name="intern_id" required>{interns.map(item => <option key={item.id} value={item.id}>{label(item)}</option>)}</select></label>
+        <label className="span-2">Project <span>(optional)</span><select name="project_id" defaultValue="">
+          <option value="">Not linked yet</option>
+          {projects.data?.filter(item => item.status === 'active').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>Start date<input name="starts_on" type="date" required /></label>
         <label>End date<input name="ends_on" type="date" required /></label>
       </div>
@@ -85,6 +92,7 @@ function InternshipHeader({ internship, role, back, children }: {
     </div>
     <dl className="facts">
       <div><dt>Program</dt><dd>{internship.program_name}</dd></div>
+      <div><dt>Project</dt><dd>{internship.project_name ?? <span className="muted">Not linked</span>}</dd></div>
       {showIntern && role === 'admin' && <div><dt>Mentor</dt><dd>{displayName(internship.mentor_name, internship.mentor_email)}</dd></div>}
       <div><dt>Period</dt><dd>{formatDate(internship.starts_on)} – {formatDate(internship.ends_on)}</dd></div>
       <div><dt>Progress</dt><dd>{internship.closed_at ? `Closed ${formatDate(internship.closed_at.slice(0, 10))}` : periodText(internship.starts_on, internship.ends_on)}</dd></div>
@@ -120,13 +128,35 @@ function TaskList({ call, base, internship, role, tasks, reload, openTask }: {
     <ul className="rows">{visible?.map(item => <li key={item.id}>
       <button className="row-link" onClick={() => openTask(item.id)}>
         <span className="row-primary"><span className="row-title">{item.title}</span>
-          {item.estimated_hours ? <span className="row-sub">{Number(item.estimated_hours)} h estimated</span> : null}</span>
+          {(item.estimated_hours || item.jira_key) ? <span className="row-sub">{item.jira_key && <span className="pill muted-pill">{item.jira_key}</span>}
+            {item.estimated_hours ? ` ${Number(item.estimated_hours)} h estimated` : ''}</span> : null}</span>
         <span className="row-when">{item.status === 'completed' ? <span>Due {formatDate(item.due_on)}</span> : <Due date={item.due_on} />}</span>
         <span className="row-state"><StatusBadge status={item.status} /></span>
         <Icon name="arrow" size={16} />
       </button>
     </li>)}</ul>
   </section>
+}
+
+/** Links the internship to the company project the intern joins; the AI plans from that project. */
+function ProjectPicker({ call, base, internship, onChanged }: { call: Call; base: string; internship: Internship; onChanged: () => void }) {
+  const projects = useResource<Project[]>(call, base + '/projects')
+  const [error, setError] = useState('')
+  async function change(project_id: string) {
+    setError('')
+    try {
+      await call(`${base}/internships/${internship.id}/project`, { method: 'PUT', body: JSON.stringify({ project_id: project_id || null }) })
+      onChanged()
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'Could not change the project.') }
+  }
+  return <label className="project-picker">Project
+    <select value={internship.project_id ?? ''} disabled={!projects.data} onChange={event => change(event.target.value)}>
+      <option value="">Not linked</option>
+      {projects.data?.filter(item => item.status === 'active' || item.id === internship.project_id)
+        .map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+    </select>
+    {error && <span role="alert" className="fine error-text">{error}</span>}
+  </label>
 }
 
 /** Admins and the assigned mentor close an internship when it ends; it then leaves the active lists. */
@@ -177,28 +207,16 @@ function InternshipPage({ call, orgId, base, internship, role, view, navigate, s
     </div>
   }
 
-  const tabs: [NonNullable<View['section']>, string][] = [['tasks', `Tasks${total ? ` · ${total}` : ''}`], ['plan', 'Plan'], ['notes', 'Notes'], ['activity', 'Activity']]
-  const section = view.section ?? 'tasks'
+  // Jira assistant: the intern's work lives in Jira. In-app tasks, plans, notes and activity are frozen.
   return <div className="stack">
-    <InternshipHeader internship={internship} role={role} back={showBack ? { label: 'All internships', go: () => navigate({ tab: 'internships' }) } : null}>
-      {total > 0 && <div className="head-progress">
-        <span><b>{done}</b> of {total} tasks done</span>
-        <Progress done={done} total={total} />
+    <InternshipHeader internship={internship} role={role} back={showBack ? { label: 'All interns', go: () => navigate({ tab: 'internships' }) } : null}>
+      {role !== 'intern' && <div className="head-controls">
+        <ProjectPicker call={call} base={base} internship={internship} onChanged={onChanged} />
+        <CloseButton call={call} base={base} internship={internship} onChanged={onChanged} />
       </div>}
-      {role !== 'intern' && <CloseButton call={call} base={base} internship={internship} onChanged={onChanged} />}
     </InternshipHeader>
-    <nav className="tabs" aria-label="Internship sections">
-      {tabs.map(([key, label]) => <button key={key} aria-current={section === key ? 'page' : undefined} onClick={() => go({ section: key })}>{label}</button>)}
-    </nav>
-    {section === 'activity' ? <Activity call={call} path={`${base}/internships/${internship.id}/activity`}
-      open={event => event.task_id ? go({ section: 'tasks', taskId: event.task_id, version: event.version ?? undefined }) : go({ section: 'plan' })} />
-      : section === 'notes' ? <Notes call={call} base={base} internshipId={internship.id} role={role} />
-      : section === 'plan' ? <Plans intern={role === "intern"} call={call} orgId={orgId} path={`${base}/internships/${internship.id}/plans`}
-        internLabel={displayName(internship.intern_name, internship.intern_email)}
-        starts={internship.starts_on} ends={internship.ends_on} mentor={role === 'mentor' && !internship.closed_at}
-        tasks={tasks.data ?? []} refreshTasks={reload} openTask={taskId => go({ section: 'tasks', taskId })}
-        taskHref={(taskId, version) => formatView({ tab: 'internships', internshipId: internship.id, section: 'tasks', taskId, version: version ?? undefined })} />
-      : <TaskList call={call} base={base} internship={internship} role={role} tasks={tasks} reload={reload} openTask={taskId => go({ section: 'tasks', taskId })} />}
+    {role !== 'intern' && <InternJira key={internship.project_id ?? 'none'} call={call} base={base} internshipId={internship.id} role={role}
+      mentor={role === 'mentor' || role === 'admin'} closed={!!internship.closed_at} onProjectNeeded={() => navigate({ tab: 'projects' })} />}
   </div>
 }
 
@@ -227,7 +245,7 @@ export function Internships({ call, orgId, role, view, navigate, manage = false 
   const programName = view.programId && records?.[0]?.program_name
   return <section className="panel">
     <header className="panel-head">
-      <div><h2>{manage ? 'Assignments' : role === 'intern' ? 'Your internship' : role === 'mentor' ? 'Your interns' : 'All internships'}
+      <div><h2>{manage ? 'Assignments' : role === 'intern' ? 'Your internship' : role === 'mentor' ? 'Your interns' : 'All interns'}
         {records && <span className="count">{records.length}</span>}</h2>
         {view.programId && <p>Program: <b>{programName || 'Selected program'}</b> · <button className="link-btn" onClick={() => navigate({ tab: 'internships' })}>Show all programs</button></p>}
       </div>
@@ -238,16 +256,14 @@ export function Internships({ call, orgId, role, view, navigate, manage = false 
     {!records && !list.error && <Loading />}
     {records?.length === 0 && <Empty icon="briefcase" title="No internships here">
       {role === 'admin' ? 'Create an assignment to get started.' : 'You’ll see an internship here once an admin assigns you.'}</Empty>}
-    {!!records?.length && <div className="table-head" aria-hidden="true"><span>{role === 'intern' ? 'Mentor' : 'Intern'}</span><span>Program</span><span>Period</span><span>Progress</span><span /></div>}
+    {!!records?.length && <div className="table-head" aria-hidden="true"><span>{role === 'intern' ? 'Mentor' : 'Intern'}</span><span>Program</span><span>Period</span><span>Project</span><span /></div>}
     <ul className="rows">{records?.map(item => <li key={item.id}>
       <button className="row-link internship-row" onClick={() => navigate({ tab: 'internships', internshipId: item.id, section: 'tasks' })}>
         <Person name={role === 'intern' ? item.mentor_name : item.intern_name} email={role === 'intern' ? item.mentor_email : item.intern_email}
           detail={role === 'admin' ? `Mentor: ${displayName(item.mentor_name, item.mentor_email)}` : undefined} />
         <span className="cell">{item.program_name}</span>
         <span className="cell muted">{formatDate(item.starts_on)} – {formatDate(item.ends_on)}</span>
-        <span className="cell progress-cell">{item.task_count > 0
-          ? <><Progress done={item.completed_count} total={item.task_count} /><span className="muted">{item.completed_count}/{item.task_count}</span></>
-          : <span className="muted">No tasks yet</span>}</span>
+        <span className="cell">{item.project_name ?? <span className="muted">No project</span>}</span>
         <span className="row-state">{item.closed_at ? <span className="pill">Closed</span>
           : item.submitted_count > 0 && <span className="pill warn">{item.submitted_count} to review</span>}</span>
       </button>

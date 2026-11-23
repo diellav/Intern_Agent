@@ -751,3 +751,34 @@
 @media (max-width: 640px) { .guide-steps li { grid-template-columns: 28px minmax(0, 1fr); } .guide-steps li > button { grid-column: 2; justify-self: start; } }
 
 .close-control { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-left: auto; }
+.head-controls { display: flex; align-items: flex-end; gap: 12px; margin-left: auto; flex-wrap: wrap; }
+.head-controls .close-control { margin-left: 0; }
+.project-picker { display: grid; gap: 4px; font-size: 13px; min-width: 180px; }
+.project-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.project-card p { margin: 0 0 6px; }
+.fit-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.fit-list p { margin: 2px 0 0; }
+.span-2 { grid-column: 1 / -1; }
+.cv-result { display: grid; gap: 12px; }
+.fit-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.proposed-tasks { display: grid; gap: 8px; margin: 0; padding-left: 20px; }
+.proposed-tasks p { margin: 2px 0 0; }
+button.project-card { display: grid; gap: 6px; width: 100%; text-align: left; align-content: start; cursor: pointer; font: inherit; color: inherit; }
+button.project-card:hover { border-color: var(--brand, #683790); }
+.project-card-foot { display: flex; gap: 8px; align-items: center; margin-top: auto; }
+.project-card-foot > svg { margin-left: auto; }
+.project-text p { margin: 0 0 8px; }
+.brief-state { font-size: 15px; margin: 0; }
+.module-list, .opportunities { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.module-list p { margin: 2px 0 0; }
+.module-progress { display: flex; align-items: center; gap: 8px; max-width: 320px; }
+.events ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.head-action { margin-left: auto; align-self: flex-start; }
+.page-title { font-size: 22px; margin: 0; display: flex; gap: 10px; align-items: center; }
+
+.issue-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--line, #eee); }
+.issue-row .row-primary { flex: 1; min-width: 0; }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.inline-form input { flex: 1; min-width: 220px; }
+.overview-row { display: grid; grid-template-columns: minmax(200px, 1.4fr) minmax(180px, 1.6fr) auto 16px; gap: 12px; align-items: center; }
+@media (max-width: 640px) { .overview-row { grid-template-columns: 1fr auto; } .overview-row .progress-cell { grid-column: 1 / -1; } }

@@ -63,8 +63,8 @@ function greeting(me: Me) {
 }
 
 function Hero({ me, summary, children }: { me: Me; summary: ReactNode; children?: ReactNode }) {
-  return <header className="hero">
-    <div><h2>{greeting(me)}</h2><p>{summary}</p></div>
+  return <header className="hero workspace-greeting">
+    <div className="greeting-copy"><span className="greeting-date">{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</span><h2>{greeting(me)}</h2><p>{summary}</p></div>
     {children}
   </header>
 }
@@ -130,7 +130,7 @@ function MentorOverview({ data, me, actions, call, orgId }: { data: Queue; me: M
             : <ul className="rows">{review.map(item => <TaskRow key={item.task_id} item={item} showIntern action="Review"
               onOpen={() => actions.openTask(item.internship_id, item.task_id)} />)}</ul>}
         </Panel>
-        <Panel title="Due this week" count={upcoming.length} hint="Work your interns are doing now."
+        <Panel title="Due this week" count={upcoming.length} 
           action={<button className="ghost sm" onClick={() => actions.go('calendar')}><Icon name="calendar" size={15} />Calendar</button>}>
           {upcoming.length === 0 ? <p className="empty-line">No deadlines in the next 7 days.</p>
             : <ul className="rows">{upcoming.map(item => <TaskRow key={item.task_id} item={item} showIntern
@@ -160,7 +160,7 @@ function InternOverview({ data, me, actions, call, orgId }: { data: Queue; me: M
           <p className="row-sub">{next.project || next.program} · <Due date={next.due_on} /></p>
           <button onClick={() => actions.openTask(next.internship_id, next.task_id)}>{next.status === 'changes_requested' ? 'Update your work' : 'Start task'}<Icon name="arrow" size={16} /></button>
         </section>}
-        {rest(changes).length > 0 && <Panel title="Needs changes" count={rest(changes).length} hint="Your mentor asked for changes.">
+        {rest(changes).length > 0 && <Panel title="Needs changes" count={rest(changes).length} >
           <ul className="rows">{rest(changes).map(item => <TaskRow key={item.task_id} item={item} showIntern={false} action="Resubmit"
             onOpen={() => actions.openTask(item.internship_id, item.task_id)} />)}</ul>
         </Panel>}
@@ -169,7 +169,7 @@ function InternOverview({ data, me, actions, call, orgId }: { data: Queue; me: M
             : <ul className="rows">{rest(todo).map(item => <TaskRow key={item.task_id} item={item} showIntern={false}
               onOpen={() => actions.openTask(item.internship_id, item.task_id)} />)}</ul>}
         </Panel>
-        {waiting.length > 0 && <Panel title="Waiting for review" count={waiting.length} hint="Your mentor has these.">
+        {waiting.length > 0 && <Panel title="Waiting for review" count={waiting.length} >
           <ul className="rows">{waiting.map(item => <TaskRow key={item.task_id} item={item} showIntern={false}
             onOpen={() => actions.openTask(item.internship_id, item.task_id)} />)}</ul>
         </Panel>}
@@ -196,7 +196,7 @@ function AdminOverview({ call, orgId, me, data, actions }: { call: Call; orgId: 
         ['Past due', data.counts.overdue]] as const).map(([label, value]) => <div key={label} className="stat-cell"><strong>{value}</strong><span>{label}</span></div>)}
     </div>
     <div className="dashboard-grid">
-      <Panel title="Programs" hint="Open a program to see its internships." action={<button className="ghost sm" onClick={() => actions.go('programs')}>All programs</button>}>
+      <Panel title="Programs"  action={<button className="ghost sm" onClick={() => actions.go('programs')}>All programs</button>}>
         {programs.error && <ErrorNote message={programs.error} onRetry={programs.reload} />}
         {!programs.data && !programs.error && <div className="skeleton" style={{ height: '6rem' }} />}
         {programs.data?.length === 0 && <p className="empty-line">No programs yet.</p>}

@@ -21,6 +21,7 @@ class TaskInput(BaseModel):
     criteria: str = Field(min_length=1, max_length=3000)
     due_on: date
     estimated_hours: float | None = Field(default=None, gt=0, le=1000)
+    jira_key: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{1,9}-[0-9]+$")  # the Jira issue this task works on
 
 
 class LinkInput(BaseModel):
@@ -65,7 +66,7 @@ def tasks(org_id: UUID, internship_id: UUID, actor: Actor):
     with deps.program_connection(actor, org_id) as c:
         assignment(c, org_id, internship_id)
         rows = c.execute(text("""
-            select id,title,criteria,due_on,status,estimated_hours from app.tasks where internship_id=:id order by due_on,id
+            select id,title,criteria,due_on,status,estimated_hours,jira_key from app.tasks where internship_id=:id order by due_on,id
         """), {"id": internship_id}).mappings()
         return [dict(row) for row in rows]
 
@@ -79,8 +80,8 @@ def create_task(org_id: UUID, internship_id: UUID, actor: Actor, data: TaskInput
         if not parent["starts_on"] <= data.due_on <= parent["ends_on"]:
             raise HTTPException(422, "The deadline must fall within the internship.")
         task_id = c.execute(text("""
-            insert into app.tasks (internship_id,title,criteria,due_on,estimated_hours)
-            values (:id,:title,:criteria,:due_on,:estimated_hours) returning id
+            insert into app.tasks (internship_id,title,criteria,due_on,estimated_hours,jira_key)
+            values (:id,:title,:criteria,:due_on,:estimated_hours,:jira_key) returning id
         """), {"id": internship_id, **data.model_dump()}).scalar_one()
         # A single task joins the published plan that covers its deadline, so every task has a plan when one exists.
         plan = c.execute(text("select * from app.attach_task_to_plan(:id)"), {"id": task_id}).mappings().first()

@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app.core.ai_provider import clip
 from app.plans.crud import plan_parent
 from app.plans.schemas import GenerateInput
+from app.jira.sync import project_ai_context
 
 MAX_OPEN_TASKS = 30
 MAX_DONE_TASKS = 10
@@ -73,12 +74,23 @@ def collect_context(connection, org_id: UUID, internship_id: UUID, actor: UUID, 
                  "total_hours_available": data.total_hours, "project": data.project or None,
                  "schedule_constraints": data.schedule_notes or data.availability or None,
                  "mentor_instructions": data.instructions or None, "today": date.today().isoformat()}
+    project = project_ai_context(connection, parent["project_id"])
+    issues = (project or {}).get("open_jira_issues", [])
+    # Jira issues the intern already has a task for are not offered again.
+    taken = {row[0] for row in connection.execute(text(
+        "select jira_key from app.tasks where internship_id=:id and jira_key is not null"), {"id": internship_id})}
+    if project:
+        project["open_jira_issues"] = [issue for issue in issues if issue["key"] not in taken]
     return {
+        "jira_open": {issue["key"] for issue in issues},
+        "jira_taken": taken,
         "open": open_tasks,
         "done": done_tasks,
         "payload": {
             "internship": {"program": program["name"], "program_description": clip(program["description"], 400),
                            "starts_on": parent["starts_on"].isoformat(), "ends_on": parent["ends_on"].isoformat()},
+            # The company project the intern joins: new work should come from it, not from invented exercises.
+            "project": project,
             "requested_plan": requested,
             "open_tasks": [task(ref, row) for ref, row in open_tasks.items()],
             "completed_tasks": [task(ref, row) for ref, row in done_tasks.items()],

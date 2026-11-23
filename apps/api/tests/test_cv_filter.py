@@ -120,13 +120,14 @@ def test_prepare_keeps_realistic_cv_and_rejects_empty():
 
 def test_model_output_is_scrubbed():
     analysis = CvAnalysis(
-        skills=["Python", "Contact blerim@mail.com"], program_ids=[], mentor_questions=["Ask Blerim about Docker"],
+        project_fit=[{"project_id": "p", "fit": "partial", "why": "Blerim knows SQL"}], learn_first=["Ask Blerim about Docker"],
         title="Plan for Blerim Hoxha", goal="Call +383 44 123 456 and grow SQL skills",
-        starter_tasks=[{"title": "Hoxha's first task", "criteria": "Push to github.com/blerimh", "day": 1}])
+        starter_tasks=[{"title": "Hoxha's first task", "jira_key": None, "why": "Contact blerim@mail.com",
+                        "criteria": "Push to github.com/blerimh", "day": 1}])
     data = sanitize_analysis(analysis, identity_names(ENGLISH))
     text = str(data)
-    for leaked in ["Blerim", "Hoxha", "blerim@mail.com", "+383", "github.com/blerimh"]:
+    for leaked in ["Blerim", "Hoxha", "blerim@mail.com", "+383", "github.com/blerimh"]:  # incl. project_fit reasons
         assert leaked not in text, leaked
-    assert data["skills"][0] == "Python"
+    assert data["project_fit"][0]["fit"] == "partial"
     assert data["title"] == "Plan for [NAME] [NAME]"
     assert data["starter_tasks"][0]["day"] == 1

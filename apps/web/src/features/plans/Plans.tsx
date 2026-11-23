@@ -57,7 +57,7 @@ export function Plans({ call, orgId, path, starts, ends, mentor, tasks, openTask
   function startFromCv(analysis: Analysis) {
     const newTasks = (analysis.starter_tasks ?? []).map(task => {
       const due = offset(startDate, task.day - 1)
-      return { title: task.title, criteria: task.criteria, due_on: due > ends ? ends : due }
+      return { title: task.title, criteria: task.criteria, due_on: due > ends ? ends : due, jira_key: task.jira_key ?? null }
     })
     blank({ title: analysis.title, goal: analysis.goal, new_tasks: newTasks })
   }

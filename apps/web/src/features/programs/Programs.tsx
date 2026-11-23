@@ -59,9 +59,9 @@ export function Programs({ call, orgId, role, openProgram }: { call: Call; orgId
       {role === 'admin' ? 'Create the first program to get started.' : 'Your admin hasn’t created any programs yet.'}</Empty>}
     {!!programs.data?.length && visible?.length === 0 && <p className="empty-line">No programs match “{search.trim()}”.</p>}
     <ul className="card-grid">{visible?.map(program => <li key={program.id}>
-      <article className="program-card">
+      <article className="program-card"><div className="program-card-symbol"><Icon name="layers" size={23} /></div>
         <h3>{program.name}</h3>
-        <p className="program-desc">{program.description || 'No description yet.'}</p>
+        {program.description && <p className="program-desc">{program.description}</p>}
         <footer>
           <span className={program.internship_count ? 'pill' : 'pill muted-pill'}>{program.internship_count} internship{program.internship_count === 1 ? '' : 's'}</span>
           {program.internship_count > 0

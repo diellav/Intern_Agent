@@ -82,26 +82,6 @@ def test_assignment_submission_and_review(monkeypatch):
                 assert response.status_code == 201, response.text
                 existing_task = response.json()["id"]
                 task_path = f"{base}/tasks/{existing_task}"
-                from app import question_assist
-                monkeypatch.setattr(question_assist, "program_connection", scoped)
-                question_path = task_path + "/questions"
-                actor = intern
-                question = client.post(question_path, json={"title": "Validate required fields", "body": "Which fields must I validate?"})
-                assert question.status_code == 201, question.text
-                question_id = question.json()["id"]
-                answers_path = base + f"/questions/{question_id}/answers"
-                actor = mentor
-                answer = client.post(answers_path, json={"body": "Validate the name field."})
-                assert answer.status_code == 201, answer.text
-                answer_id = answer.json()["id"]
-                assert client.post(answers_path + f"/{answer_id}/verify").status_code == 200
-                source_path = question_path + f"/sources/answer/{answer_id}"
-                assert client.get(source_path).json()["body"] == "Validate the name field."
-                actor = outsider
-                assert client.get(question_path).status_code == 404
-                assert client.get(answers_path).status_code == 404
-                assert client.get(source_path).status_code == 404
-                actor = mentor
                 plan_path = f"{base}/internships/{internship}/plans"
                 draft = {
                     "title": "API practice", "goal": "Handle failed responses",
@@ -170,22 +150,6 @@ def test_assignment_submission_and_review(monkeypatch):
                 unread = client.get(inbox, params={"unread": "true"}).json()
                 assert intern_notices[0]["id"] not in {item["id"] for item in unread}
                 assert client.get(inbox + "/unread-count").json() == {"unread": len(unread)}
-                questions = base + "/questions"
-                created = client.post(questions, json={"title":"Why CORS blocks React","body":"An API call fails."})
-                assert created.status_code == 201, created.text
-                question = created.json()["id"]
-                assert len(client.get(questions, params={"q":"CORS"}).json()) == 1
-                assert client.get(questions, params={"q":"unrelated"}).json() == []
-                thread = f"{questions}/{question}/answers"
-                posted = client.post(thread, json={"body":"Allow the frontend origin in your API."})
-                assert posted.status_code == 201, posted.text
-                verify = f'{thread}/{posted.json()["id"]}/verify'
-                assert client.post(verify).status_code == 403
-                actor = mentor
-                assert client.post(verify).status_code == 200
-                assert client.get(questions).json()[0]["verified"] is True
-                actor = outsider
-                assert client.get(thread).status_code == 404
         finally:
             tx.rollback()
     engine.dispose()
@@ -250,11 +214,11 @@ def test_ai_draft_edit_publish_flow(monkeypatch):
                         raise HTTPException(404)
                     yield connection
 
-            from app import ai_control, cv, progress, question_assist
+            from app import ai_control, cv, progress
             from io import BytesIO
             from zipfile import ZipFile
 
-            for module in (ai_control, cv, progress, question_assist):
+            for module in (ai_control, cv, progress):
                 monkeypatch.setattr(module, "program_connection", scoped)
             monkeypatch.setattr(settings(), "ai_requests_per_hour", 1)
             fake = Fake()
@@ -308,35 +272,8 @@ def test_ai_draft_edit_publish_flow(monkeypatch):
                 published = client.post(publish, json={"revision": plan["revision"]})
                 assert published.status_code == 200, published.text
                 assert client.post(publish, json={"revision": plan["revision"]}).json() == published.json()
-                question_path = f"{base}/tasks/{open_task}/questions"
-                question = client.post(question_path, json={"title": "Practice question", "body": "What can I use?"})
-                assert question.status_code == 201, question.text
-                actor = other_mentor
-                assert client.get(question_path).status_code == 404
-                assert client.get(base + "/questions/" + question.json()["id"] + "/answers").status_code == 404
-
                 actor = mentor
-                question_id = question.json()["id"]
-                notes = f"{base}/internships/{internship}/notes"
-                shared = client.post(notes, json={"body": "Practice question: use accessible form labels.", "visibility": "shared"})
-                private = client.post(notes, json={"body": "Practice question: excluded private detail.", "visibility": "private"})
-                assert shared.status_code == private.status_code == 201
                 monkeypatch.setattr(settings(), "ai_requests_per_hour", 5)
-
-                class QaFake:
-                    model = "fake-qa"
-                    def complete(self, messages, schema):
-                        assert "use accessible form labels" in messages[1]["content"]
-                        assert "excluded private detail" not in messages[1]["content"]
-                        return jsonlib.dumps({"parts": [{"body": "Use accessible form labels.", "sources": [0]}]})
-
-                provider["value"] = QaFake()
-                suggested = client.post(question_path + f"/{question_id}/suggest")
-                assert suggested.status_code == 200, suggested.text
-                assert suggested.json()["parts"][0]["sources"][0]["id"] == shared.json()["id"]
-                assert client.get(question_path + "/sources/note/" + shared.json()["id"]).status_code == 200
-                assert client.get(question_path + "/sources/note/" + private.json()["id"]).status_code == 404
-
                 report_path = f"{base}/internships/{internship}/progress"
                 dates = {"start": start.isoformat(), "end": end.isoformat()}
                 assert client.put(report_path + "/report", params=dates, json={"summary": "A draft"}).status_code == 200
@@ -372,20 +309,33 @@ def test_ai_draft_edit_publish_flow(monkeypatch):
                 uploaded = client.put(cv_path + "?consent=true", content=document.getvalue(), headers=mime)
                 assert uploaded.status_code == 200, uploaded.text
 
+                project = client.post(base + "/projects", json={"name": "Client portal", "tech_stack": "React, FastAPI",
+                    "intern_areas": "Form validation and accessibility fixes", "jira_key": "CP"})
+                assert project.status_code == 201, project.text
+                project_id = project.json()["id"]
+                assert client.put(f"{base}/internships/{internship}/project", json={"project_id": project_id}).status_code == 200
+
                 class CvFake:
                     model = "fake-cv"
                     def complete(self, messages, schema):
                         assert "fictional@example.test" not in messages[1]["content"]
                         assert "React forms" in messages[1]["content"]
-                        return jsonlib.dumps({"skills": ["React forms"], "program_ids": [str(program)],
-                            "mentor_questions": ["What should the first exercise cover?"],
-                            "title": "React practice", "goal": "Build and test an accessible form.",
-                            "starter_tasks": [{"title": "Build a form", "criteria": "Validate required fields", "day": 1}]})
+                        assert "Form validation and accessibility fixes" in messages[1]["content"]  # the project reaches the AI
+                        assert '"CP"' not in messages[1]["content"]  # Jira and repository links do not
+                        return jsonlib.dumps({
+                            "project_fit": [{"project_id": project_id, "fit": "strong", "why": "React forms match."}],
+                            "learn_first": ["FastAPI"], "title": "React practice", "goal": "Build and test an accessible form.",
+                            "starter_tasks": [{"title": "Build a form", "jira_key": "CP-404", "why": "Uses React forms.",
+                                               "criteria": "Validate required fields", "day": 1}]})
 
                 provider["value"] = CvFake()
                 analysis = client.post(cv_path + "/analyze")
                 assert analysis.status_code == 200, analysis.text
-                assert analysis.json()["program_names"] == ["Planner"]
+                assert analysis.json()["project_fit"][0]["project_name"] == "Client portal"
+                assert analysis.json()["starter_tasks"][0]["jira_key"] is None  # not an open issue of the project: dropped
+                actor = intern  # interns see only their own internship's project, and can't edit it
+                assert [item["name"] for item in client.get(base + "/projects").json()] == ["Client portal"]
+                assert client.post(base + "/projects", json={"name": "Mine"}).status_code == 403
                 actor = intern  # interns can't read, upload or delete the CV
                 assert client.get(cv_path).status_code == 403
                 assert client.delete(cv_path).status_code == 403
@@ -518,7 +468,7 @@ def test_member_role_changes_and_invite(monkeypatch):
 def test_attention_signals_and_question_sources(monkeypatch):
     import json as jsonlib
     from datetime import date, timedelta
-    from app import ai_control, attention, question_assist
+    from app import ai_control, attention
     from app.core.ai_provider import planner_provider
 
     engine = create_engine(settings().migration_database_url)
@@ -570,7 +520,7 @@ def test_attention_signals_and_question_sources(monkeypatch):
                     connection.execute(text("select set_config('internagent.actor_id',:actor,true)"), {"actor": str(user_id)})
                     yield connection
 
-            for module in (ai_control, attention, question_assist, deps):
+            for module in (ai_control, attention, deps):
                 monkeypatch.setattr(module, "program_connection", scoped)
             monkeypatch.setattr(settings(), "ai_requests_per_hour", 10)
 
@@ -604,14 +554,6 @@ def test_attention_signals_and_question_sources(monkeypatch):
                 sent = provider["value"].messages[1]["content"]
                 assert "Ada Intern" not in sent and str(intern) not in sent
 
-                question_path = f"{base}/tasks/{overdue_planned}/questions"
-                asked = client.post(question_path, json={"title": "How do I resubmit my work?", "body": "I got feedback."})
-                assert asked.status_code == 201, asked.text
-                provider["value"] = Fake({"parts": [{"body": "Upload a new version.", "sources": [0]}]})
-                suggested = client.post(f"{question_path}/{asked.json()['id']}/suggest")
-                assert suggested.status_code == 200, suggested.text
-                assert [s["id"] for s in suggested.json()["parts"][0]["sources"]] == [answers["org"]]
-                assert "(other)" not in provider["value"].messages[1]["content"]
         finally:
             tx.rollback()
 
@@ -673,9 +615,6 @@ def test_plan_publish_single_tasks_and_closing(monkeypatch):
                 assert single["id"] in client.get(plans_path).json()[0]["task_ids"]
 
                 actor = intern
-                question = client.post(f"{base}/tasks/{single['id']}/questions", json={"title": "Scope?", "body": "Which form?"})
-                assert question.status_code == 201
-                assert client.get(base + "/questions").json()[0]["task_id"] == single["id"]
                 closed_path = f"{base}/internships/{internship}/closed"
                 assert client.put(closed_path, json={"closed": True}).status_code == 403
 
