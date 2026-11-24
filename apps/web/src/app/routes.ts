@@ -1,6 +1,6 @@
 export type Tab = 'overview' | 'internships' | 'calendar' | 'plans' | 'reviews' | 'notes'
   | 'ai-usage' | 'progress' | 'members' | 'programs' | 'projects' | 'assignments' | 'notifications'
-export type InternshipSection = 'tasks' | 'plan' | 'notes' | 'activity'
+export type InternshipSection = 'tasks' | 'plan' | 'notes' | 'activity' | 'jira'
 /** Where the workspace is pointed. Kept in the URL hash so links, refresh and Back all work. */
 export type View = {
   tab: Tab
@@ -12,7 +12,7 @@ export type View = {
 }
 
 const tabs: Tab[] = ['overview', 'internships', 'calendar', 'plans', 'reviews', 'notes', 'ai-usage', 'progress', 'programs', 'projects', 'assignments', 'members', 'notifications']
-const sections: InternshipSection[] = ['tasks', 'plan', 'notes', 'activity']
+const sections: InternshipSection[] = ['tasks', 'plan', 'notes', 'activity', 'jira']
 
 export function parseView(hash: string): View {
   const [path, query = ''] = hash.replace(/^#\/?/, '').split('?')

@@ -207,16 +207,34 @@ function InternshipPage({ call, orgId, base, internship, role, view, navigate, s
     </div>
   }
 
-  // Jira assistant: the intern's work lives in Jira. In-app tasks, plans, notes and activity are frozen.
+  const tabs: [NonNullable<View['section']>, string][] = [['tasks', `Tasks${total ? ` · ${total}` : ''}`], ['plan', 'Plan'], ['notes', 'Notes'], ['activity', 'Activity'],
+    ...(role !== 'intern' ? [['jira', 'Jira'] as [NonNullable<View['section']>, string]] : [])]
+  const section = view.section ?? 'tasks'
   return <div className="stack">
-    <InternshipHeader internship={internship} role={role} back={showBack ? { label: 'All interns', go: () => navigate({ tab: 'internships' }) } : null}>
+    <InternshipHeader internship={internship} role={role} back={showBack ? { label: 'All internships', go: () => navigate({ tab: 'internships' }) } : null}>
+      {total > 0 && <div className="head-progress">
+        <span><b>{done}</b> of {total} tasks done</span>
+        <Progress done={done} total={total} />
+      </div>}
       {role !== 'intern' && <div className="head-controls">
         <ProjectPicker call={call} base={base} internship={internship} onChanged={onChanged} />
         <CloseButton call={call} base={base} internship={internship} onChanged={onChanged} />
       </div>}
     </InternshipHeader>
-    {role !== 'intern' && <InternJira key={internship.project_id ?? 'none'} call={call} base={base} internshipId={internship.id} role={role}
-      mentor={role === 'mentor' || role === 'admin'} closed={!!internship.closed_at} onProjectNeeded={() => navigate({ tab: 'projects' })} />}
+    <nav className="tabs" aria-label="Internship sections">
+      {tabs.map(([key, label]) => <button key={key} aria-current={section === key ? 'page' : undefined} onClick={() => go({ section: key })}>{label}</button>)}
+    </nav>
+    {section === 'activity' ? <Activity call={call} path={`${base}/internships/${internship.id}/activity`}
+      open={event => event.task_id ? go({ section: 'tasks', taskId: event.task_id, version: event.version ?? undefined }) : go({ section: 'plan' })} />
+      : section === 'notes' ? <Notes call={call} base={base} internshipId={internship.id} role={role} />
+      : section === 'jira' && role !== 'intern' ? <InternJira key={internship.project_id ?? 'none'} call={call} base={base} internshipId={internship.id} role={role}
+        mentor closed={!!internship.closed_at} onProjectNeeded={() => navigate({ tab: 'projects' })} />
+      : section === 'plan' ? <Plans intern={role === "intern"} call={call} orgId={orgId} path={`${base}/internships/${internship.id}/plans`}
+        internLabel={displayName(internship.intern_name, internship.intern_email)}
+        starts={internship.starts_on} ends={internship.ends_on} mentor={role === 'mentor' && !internship.closed_at}
+        tasks={tasks.data ?? []} refreshTasks={reload} openTask={taskId => go({ section: 'tasks', taskId })}
+        taskHref={(taskId, version) => formatView({ tab: 'internships', internshipId: internship.id, section: 'tasks', taskId, version: version ?? undefined })} />
+      : <TaskList call={call} base={base} internship={internship} role={role} tasks={tasks} reload={reload} openTask={taskId => go({ section: 'tasks', taskId })} />}
   </div>
 }
 
@@ -245,7 +263,7 @@ export function Internships({ call, orgId, role, view, navigate, manage = false 
   const programName = view.programId && records?.[0]?.program_name
   return <section className="panel">
     <header className="panel-head">
-      <div><h2>{manage ? 'Assignments' : role === 'intern' ? 'Your internship' : role === 'mentor' ? 'Your interns' : 'All interns'}
+      <div><h2>{manage ? 'Assignments' : role === 'intern' ? 'Your internship' : role === 'mentor' ? 'Your interns' : 'All internships'}
         {records && <span className="count">{records.length}</span>}</h2>
         {view.programId && <p>Program: <b>{programName || 'Selected program'}</b> · <button className="link-btn" onClick={() => navigate({ tab: 'internships' })}>Show all programs</button></p>}
       </div>
@@ -256,14 +274,16 @@ export function Internships({ call, orgId, role, view, navigate, manage = false 
     {!records && !list.error && <Loading />}
     {records?.length === 0 && <Empty icon="briefcase" title="No internships here">
       {role === 'admin' ? 'Create an assignment to get started.' : 'You’ll see an internship here once an admin assigns you.'}</Empty>}
-    {!!records?.length && <div className="table-head" aria-hidden="true"><span>{role === 'intern' ? 'Mentor' : 'Intern'}</span><span>Program</span><span>Period</span><span>Project</span><span /></div>}
+    {!!records?.length && <div className="table-head" aria-hidden="true"><span>{role === 'intern' ? 'Mentor' : 'Intern'}</span><span>Program</span><span>Period</span><span>Progress</span><span /></div>}
     <ul className="rows">{records?.map(item => <li key={item.id}>
       <button className="row-link internship-row" onClick={() => navigate({ tab: 'internships', internshipId: item.id, section: 'tasks' })}>
         <Person name={role === 'intern' ? item.mentor_name : item.intern_name} email={role === 'intern' ? item.mentor_email : item.intern_email}
           detail={role === 'admin' ? `Mentor: ${displayName(item.mentor_name, item.mentor_email)}` : undefined} />
-        <span className="cell">{item.program_name}</span>
+        <span className="cell">{item.program_name}{item.project_name && <span className="row-sub">{item.project_name}</span>}</span>
         <span className="cell muted">{formatDate(item.starts_on)} – {formatDate(item.ends_on)}</span>
-        <span className="cell">{item.project_name ?? <span className="muted">No project</span>}</span>
+        <span className="cell progress-cell">{item.task_count > 0
+          ? <><Progress done={item.completed_count} total={item.task_count} /><span className="muted">{item.completed_count}/{item.task_count}</span></>
+          : <span className="muted">No tasks yet</span>}</span>
         <span className="row-state">{item.closed_at ? <span className="pill">Closed</span>
           : item.submitted_count > 0 && <span className="pill warn">{item.submitted_count} to review</span>}</span>
       </button>

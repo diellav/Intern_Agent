@@ -7,20 +7,22 @@ type Step = { title: string; detail: string; tab: Tab; action: string }
 
 const steps: Record<Role, Step[]> = {
   admin: [
-    { title: 'Add projects with their Jira key', detail: 'The assistant reads each board: modules, progress and issues interns can take.', tab: 'projects', action: 'Projects' },
-    { title: 'Invite people', detail: 'Invite mentors and interns by email and give each a role.', tab: 'members', action: 'Members' },
-    { title: 'Pair them', detail: 'Create an assignment: intern, mentor, project and dates.', tab: 'assignments', action: 'Assignments' },
-    { title: 'Follow progress', detail: 'Overview shows each intern’s Jira work by status.', tab: 'overview', action: 'Overview' },
+    { title: 'Add programs and projects', detail: 'A program is the intern cohort; a project is the company work they join. Add the project’s Jira key so the assistant can read its board.', tab: 'projects', action: 'Projects' },
+    { title: 'Invite people', detail: 'Invite mentors and interns by email and give each a role. They sign in with a code.', tab: 'members', action: 'Members' },
+    { title: 'Pair them', detail: 'Create an assignment: intern, mentor, program, project and dates. The mentor takes it from there.', tab: 'assignments', action: 'Assignments' },
+    { title: 'Follow progress', detail: 'Overview shows open work, each intern’s Jira progress and who may need help.', tab: 'overview', action: 'Overview' },
   ],
   mentor: [
-    { title: 'Check the project', detail: 'In Projects, sync the Jira board and read where interns can start.', tab: 'projects', action: 'Projects' },
-    { title: 'Link your intern', detail: 'Open the intern and link their Jira account.', tab: 'internships', action: 'Interns' },
-    { title: 'Assign in Jira', detail: 'Pick from the suggested issues (and the CV fit, if you analyse a CV) and assign them in Jira with one click.', tab: 'internships', action: 'Interns' },
-    { title: 'Follow progress', detail: 'Overview shows how each intern’s issues move on the board.', tab: 'overview', action: 'Overview' },
+    { title: 'Plan the first period', detail: 'Open Plans, choose your intern, analyse their CV against the project and Generate draft. Approve to assign the tasks.', tab: 'plans', action: 'Plans' },
+    { title: 'Use the Jira board', detail: 'In the intern’s Jira tab, link their Jira account and assign suggested issues in Jira with one click.', tab: 'internships', action: 'Internships' },
+    { title: 'Review submissions', detail: 'Submissions appear in Reviews and your notifications. Use AI suggestions if you like, then approve or request changes.', tab: 'reviews', action: 'Reviews' },
+    { title: 'Share a progress report', detail: 'In Progress reports, generate a summary from real evidence, edit it and share it with the intern.', tab: 'progress', action: 'Progress reports' },
   ],
   intern: [
-    { title: 'Read your project', detail: 'See what the team builds and what it works on now.', tab: 'projects', action: 'Projects' },
-    { title: 'Work in Jira', detail: 'Your mentor assigns your issues on the team’s Jira board.', tab: 'overview', action: 'Overview' },
+    { title: 'Start with your next task', detail: 'Overview shows what to do next. Open a task to read what “done” means.', tab: 'overview', action: 'Overview' },
+    { title: 'Submit your work', detail: 'On the task, add a description, links or files and click Submit work. Your mentor gets notified.', tab: 'reviews', action: 'Tasks' },
+    { title: 'Follow feedback', detail: 'Notifications tell you when work is approved or needs changes. Send a new version from the same task.', tab: 'notifications', action: 'Notifications' },
+    { title: 'Know your project', detail: 'Projects shows what the team builds and what it works on now.', tab: 'projects', action: 'Projects' },
   ],
 }
 

@@ -18,8 +18,8 @@ function nextStep(row: Row) {
 }
 
 /** Staff: every intern, their project and how their Jira work is moving. Interns: their project. */
-export function JiraOverview({ call, orgId, role, me, openInternship, go }: {
-  call: Call; orgId: string; role: Role; me: Me; openInternship: (id: string) => void; go: (tab: Tab) => void
+export function JiraOverview({ call, orgId, role, me, openInternship, go, guide = true }: {
+  call: Call; orgId: string; role: Role; me: Me; openInternship: (id: string) => void; go: (tab: Tab) => void; guide?: boolean
 }) {
   const staff = role !== 'intern'
   const rows = useResource<Row[]>(call, staff ? `/api/organizations/${orgId}/jira-overview` : null)
@@ -27,7 +27,7 @@ export function JiraOverview({ call, orgId, role, me, openInternship, go }: {
   const first = displayName(me.full_name, me.email).split(' ')[0]
 
   if (!staff) return <div className="stack">
-    <Guide role={role} go={go} />
+    {guide && <Guide role={role} go={go} />}
     <section className="panel"><h2>Hi {first}</h2>
       <p>Your tasks live in Jira, on your team’s board. Your mentor assigns them there, and you work on them like everyone else on the team.</p></section>
     {projects.error && <ErrorNote message={projects.error} onRetry={projects.reload} />}
@@ -43,7 +43,7 @@ export function JiraOverview({ call, orgId, role, me, openInternship, go }: {
 
   const data = rows.data
   return <div className="stack">
-    <Guide role={role} go={go} />
+    {guide && <Guide role={role} go={go} />}
     <section className="panel">
       <header className="panel-head">
         <div><h2>Interns and their Jira work</h2><p>Each intern’s issues on their project’s board, by status. Open an intern to assign work in Jira.</p></div>

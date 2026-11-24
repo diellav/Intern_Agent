@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, useResource, type Call, type Membership, type Role } from '../lib/api'
 import { Avatar, ErrorNote, Icon, Modal, displayName, type IconName, ConfirmHost } from '../ui'
+import { Overview } from '../features/overview/Overview'
 import { JiraOverview } from '../features/jira/JiraOverview'
 import { Internships } from '../features/internships/Internships'
 import { InternshipPicker } from '../features/internships/InternshipPicker'
@@ -25,26 +26,39 @@ type NavGroup = { label: string; items: NavItem[] }
 
 function navigation(role: Role): NavGroup[] {
   const item = (id: Tab, label: string, icon: IconName, blurb: string, title = label): NavItem => ({ id, label, icon, title, blurb })
-  // Jira assistant: projects and interns. Plans, in-app tasks and reviews, notes, Q&A, calendar, progress reports
-  // and notifications are frozen (code and data kept, hidden from navigation) while the concept is validated.
   const groups: NavGroup[] = [
     { label: 'Workspace', items: [
-      item('overview', 'Overview', 'home', role === 'intern' ? 'Your project and where your work lives.' : 'Your interns and how their Jira work is moving.'),
-      ...(role !== 'intern' ? [item('internships', 'Interns', 'user', role === 'admin' ? 'Every intern, their project and Jira work.' : 'Your interns: assign work in Jira and see its progress.')] : []),
+      item('overview', 'Overview', 'home', role === 'mentor' ? 'Reviews waiting for you, then your interns.'
+        : role === 'intern' ? 'What to work on next.' : 'Your organization at a glance.'),
+      item('internships', 'Internships', 'briefcase', role === 'admin' ? 'Every internship in your organization.'
+        : role === 'mentor' ? 'The interns you mentor.' : 'Your internship, plan and history.'),
+      item('progress', 'Progress reports', 'layers', 'Review progress and open the supporting work.'),
+      item('calendar', 'Calendar', 'calendar', 'Task deadlines you can see, day by day.'),
+    ] },
+    { label: 'Planning', items: [
       item('projects', 'Projects', 'briefcase', role === 'intern' ? 'The company project you are working on.' : 'Company projects, their Jira boards and where interns can help.'),
+      item('plans', 'Plans', 'layers', role === 'mentor' ? 'Choose an intern to draft or review a plan.' : 'Plans for the internships you can see.'),
+      role === 'mentor'
+        ? item('reviews', 'Reviews', 'check', 'Submissions waiting for your decision.')
+        : item('reviews', 'Tasks', 'file', role === 'intern' ? 'All your open tasks.' : 'Open tasks across the organization.'),
+    ] },
+    { label: 'Updates', items: [item('notifications', 'Notifications', 'bell', 'Everything addressed to you, newest first.')] },
+    { label: 'Knowledge', items: [
+      ...(role !== 'admin' ? [item('notes', 'Notes', 'book', role === 'mentor' ? 'Private and shared notes per intern.' : 'Notes your mentor shared with you.')] : []),
+      ...(role !== 'admin' ? [item('programs', 'Programs', 'grid', 'Programs and the internships you can open.')] : []),
     ] },
   ]
   if (role === 'admin') groups.push({ label: 'Management', items: [
-    item('assignments', 'Assignments', 'plus', 'Pair interns with mentors and a project.'),
-    item('members', 'Members', 'user', 'Invite people and manage organization access.'),
-    item('programs', 'Programs', 'grid', 'Intern cohorts.'),
+    item('programs', 'Programs', 'grid', 'Programs, their descriptions and internships.'),
     item('ai-usage', 'AI usage', 'layers', 'Review AI requests and feedback.'),
+    item('members', 'Members', 'user', 'Invite people and manage organization access.'),
+    item('assignments', 'Assignments', 'user', 'Pair interns with mentors for a program and project.'),
   ] })
   return groups
 }
 
-const mobileTabs: Tab[] = ['overview', 'internships', 'projects']
-const SHOW_NOTIFICATIONS = false  // frozen with in-app tasks; Slack will carry Jira updates
+const mobileTabs: Tab[] = ['overview', 'internships', 'calendar', 'reviews']
+const SHOW_NOTIFICATIONS = true
 
 /** Counts requests in flight so the top bar can show that something is happening. */
 function useActivity(call: Call) {
@@ -164,7 +178,7 @@ export function Workspace({ session, call: rawCall, memberships, me: initialMe }
     ?? { id: view.tab, label: 'Notifications', icon: 'bell' as IconName, title: 'Notifications', blurb: 'Everything addressed to you, newest first.' }
   useEffect(() => { document.title = `${current.title} · ${PRODUCT}` }, [current.title])
   const openTask = (internshipId: string, taskId: string, version?: number) => navigate({ tab: 'internships', internshipId, section: 'tasks', taskId, version })
-  const openSection = useCallback((internshipId: string, section: 'plan' | 'notes' | 'tasks', replace = false) =>
+  const openSection = useCallback((internshipId: string, section: 'plan' | 'notes' | 'tasks' | 'jira', replace = false) =>
     navigate({ tab: 'internships', internshipId, section }, { replace }), [navigate])
   const count = unread.data?.unread ?? 0
   const countLabel = count > 99 ? '99+' : String(count)
@@ -258,8 +272,14 @@ export function Workspace({ session, call: rawCall, memberships, me: initialMe }
       </header>}
       {unread.error && view.tab === 'notifications' && <ErrorNote message="Could not load the unread count." onRetry={reloadUnread} />}
       <div className="page" key={view.tab + org}>
-        {view.tab === 'overview' ? <JiraOverview call={call} orgId={org} role={role} me={me}
-          openInternship={id => openSection(id, 'tasks')} go={tab => navigate({ tab })} />
+        {view.tab === 'overview' ? <div className="stack">
+          <Overview call={call} orgId={org} role={role} me={me} actions={{
+            openTask, openPlan: id => openSection(id, 'plan'), openInternship: id => openSection(id, 'tasks'),
+            openProgram: programId => navigate({ tab: 'internships', programId }), go: tab => navigate({ tab }),
+          }} />
+          {role !== 'intern' && <JiraOverview call={call} orgId={org} role={role} me={me} guide={false}
+            openInternship={id => openSection(id, 'jira')} go={tab => navigate({ tab })} />}
+        </div>
           : view.tab === 'internships' || view.tab === 'assignments'
             ? <Internships call={call} orgId={org} role={role} view={view.tab === 'assignments' ? { tab: 'internships' } : view} navigate={navigate} manage={view.tab === 'assignments'} />
           : view.tab === 'progress' ? <ProgressReports canEdit={role !== 'intern'} key={org} call={call} orgId={org} openTask={openTask} />

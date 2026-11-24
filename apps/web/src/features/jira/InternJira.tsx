@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useResource, type Call, type Role } from '../../lib/api'
 import { Empty, ErrorNote, Icon, Loading, confirmAction } from '../../ui'
-import { CvPanel } from '../ai/CvPanel'
 
 type Issue = { key: string; summary: string; type: string; status: string; status_category?: string; module: string | null }
 export type JiraWork = {
@@ -91,6 +90,5 @@ export function InternJira({ call, base, internshipId, role, mentor, closed, onP
       {!data.linked && data.suggestions.length > 0 && <p className="fine">Link the intern’s Jira account to assign these.</p>}
     </section>
 
-    {mentor && role === 'mentor' && <CvPanel call={call} org={base.split('/').pop() ?? ''} path={path + '/cv'} onAnalyzed={work.reload} />}
   </div>
 }
