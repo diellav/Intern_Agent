@@ -133,7 +133,7 @@ def test_files_links_versions_and_access(monkeypatch):
                         return self.raw
                 good = FakeAI(jsonlib.dumps({"summary": "Report attached with a PR link.", "criteria": [
                     {"criterion": "Upload a report", "status": "unclear", "evidence": "A PDF named Report final is attached."}],
-                    "suggested_feedback": "Please confirm the summary page.", "check": ["Open the PDF."], "suggested_decision": None}))
+                    "previous_feedback": [], "suggested_feedback": "Please confirm the summary page.", "check": ["Open the PDF."], "suggested_decision": None}))
                 assist_path = f"{t}/review-assist"
                 monkeypatch.setitem(app.dependency_overrides, planner_provider, lambda: good)
                 actor = intern

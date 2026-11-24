@@ -76,7 +76,12 @@ def metered_provider(org_id: UUID, actor: Actor, request: Request, response: Res
                      provider: Annotated[Provider | None, Depends(planner_provider)]) -> Provider | None:
     if provider is None:
         return None
-    return MeteredProvider(provider, org_id, actor, request.scope["route"].endpoint.__name__, response)
+    action = request.scope["route"].endpoint.__name__
+    from app.core.ai_provider import GroqProvider
+    if action == "review_assist" and isinstance(provider, GroqProvider) and settings().groq_review_model:
+        config = settings()
+        provider = GroqProvider(config.groq_api_key, config.groq_review_model, config.groq_timeout_seconds)
+    return MeteredProvider(provider, org_id, actor, action, response)
 
 
 class Vote(BaseModel):

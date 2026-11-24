@@ -549,10 +549,14 @@ def test_attention_signals_and_question_sources(monkeypatch):
                 assert silent["count"] == 6 and silent["has_submission"] is False
                 assert silent["intern_name"] is None and silent["intern_email"] == f"{quiet_intern}@example.test"
 
-                provider["value"] = Fake({"next_step": "Check in about the overdue tasks."})
-                assert client.post(f"{base}/attention/{busy}/overdue/explain").status_code == 200
+                provider["value"] = Fake({"summary": "Two tasks are overdue.", "causes": [{"cause": "Deadlines packed", "evidence": "Both due the same week"}],
+                                          "actions": [{"action": "Move one deadline", "why": "Less overload"}], "message_to_intern": ""})
+                guidance = client.post(f"{base}/attention/{busy}/overdue/explain")
+                assert guidance.status_code == 200, guidance.text
+                assert guidance.json()["actions"][0]["action"] == "Move one deadline"
                 sent = provider["value"].messages[1]["content"]
-                assert "Ada Intern" not in sent and str(intern) not in sent
+                assert "Ada Intern" not in sent and str(intern) not in sent and "@example.test" not in sent
+                assert '"workload"' in sent and '"tasks"' in sent  # the full recorded picture, not just the signal
 
         finally:
             tx.rollback()

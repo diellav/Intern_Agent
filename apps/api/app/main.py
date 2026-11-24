@@ -14,6 +14,7 @@ from sqlalchemy import create_engine, text
 
 
 class Settings(BaseSettings):
+    groq_review_model: str = "qwen/qwen3.8-27b"
     ai_requests_per_hour: int = Field(default=30, ge=1)
     groq_input_usd_per_million: float | None = Field(default=None, ge=0)
     groq_output_usd_per_million: float | None = Field(default=None, ge=0)
@@ -100,7 +101,7 @@ app = FastAPI(title="InternAgent")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings().frontend_origin],
-    allow_methods=["GET", "POST", "PUT"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
     expose_headers=["X-AI-Usage-ID"],
 )
@@ -234,3 +235,6 @@ app.include_router(ai_control_router)
 
 from app.cv import router as cv_router
 app.include_router(cv_router)
+
+from app.avatars import router as avatars_router
+app.include_router(avatars_router)

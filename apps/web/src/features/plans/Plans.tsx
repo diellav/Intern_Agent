@@ -11,8 +11,8 @@ type Plan = Omit<Draft, 'carry' | 'new_tasks'> & {
   draft: { carry: PlanTask[]; new_tasks: NewTask[] }
 }
 
-export function Plans({ call, orgId, path, starts, ends, mentor, tasks, openTask, refreshTasks, taskHref, internLabel, intern }: {
-  intern?: boolean; call: Call; orgId: string; path: string; starts: string; ends: string; mentor: boolean; tasks: PlanTask[]; internLabel: string
+export function Plans({ call, orgId, path, starts, ends, mentor, admin = false, tasks, openTask, refreshTasks, taskHref, internLabel, intern }: {
+  admin?: boolean; intern?: boolean; call: Call; orgId: string; path: string; starts: string; ends: string; mentor: boolean; tasks: PlanTask[]; internLabel: string
   openTask: (id: string) => void; refreshTasks: () => void; taskHref: (taskId: string, version?: number | null) => string
 }) {
   const plans = useResource<Plan[]>(call, path)
@@ -25,12 +25,23 @@ export function Plans({ call, orgId, path, starts, ends, mentor, tasks, openTask
   const [editing, setEditing] = useState<Plan | null>(null)
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
+  const [cardError, setCardError] = useState<{ id: string; message: string } | null>(null)
   const [phase, setPhase] = useState<'saving' | 'publishing'>('saving')
   const [receipt, setReceipt] = useState<Plan | null>(null)
   const running = useRef(false)
   const saved = useRef<{ draft: Draft; plan: Plan } | null>(null)
   const today = new Intl.DateTimeFormat('sv-SE').format(new Date())
-  const startDate = today < starts ? starts : today > ends ? ends : today
+  const publishedPlans = (plans.data ?? []).filter(plan => plan.published_at)
+  const continuing = publishedPlans.length > 0
+  const lastEnd = publishedPlans.reduce((latest, plan) => plan.ends_on > latest ? plan.ends_on : latest, '')
+  const nextDay = lastEnd ? offset(lastEnd, 1) : today
+  const suggestedStart = continuing && nextDay > today && nextDay <= ends ? nextDay : today
+  const startDate = suggestedStart < starts ? starts : suggestedStart > ends ? ends : suggestedStart
+  const counts = {
+    completed: tasks.filter(task => task.status === 'completed').length,
+    remaining: tasks.filter(task => task.status === 'planned' || task.status === 'changes_requested').length,
+    review: tasks.filter(task => task.status === 'submitted').length,
+  }
 
   function open(next: Draft, plan: Plan | null = null, nextNotes: DraftNotes | null = null) {
     saved.current = null
@@ -139,16 +150,26 @@ export function Plans({ call, orgId, path, starts, ends, mentor, tasks, openTask
       
       <div><h2>Plans</h2><p>{mentor ? 'Draft the next period with AI or by hand, review it, then approve to assign the tasks.' : 'Plans your mentor has published.'}</p></div>
       {mentor && !draft && <div className="actions">
-        <button className="secondary" disabled={pending} onClick={() => blank()}><Icon name="plus" size={16} />Write plan</button>
-        <button disabled={pending || !ai.data?.configured} onClick={() => { setError(''); setGenerating(true) }}
-          title={ai.data && !ai.data.configured ? 'AI drafting is not configured on the server' : undefined}><Icon name="sparkle" size={16} />Generate draft</button>
+        <button className="secondary" disabled={pending || !plans.data} onClick={() => blank()}><Icon name="plus" size={16} />Write plan</button>
+        <button disabled={pending || !plans.data || !ai.data?.configured} onClick={() => { setError(''); setGenerating(true) }}
+          title={ai.data && !ai.data.configured ? 'AI drafting is not configured on the server' : undefined}><Icon name="sparkle" size={16} />{continuing ? "Plan next period" : "Create first plan"}</button>
       </div>}
     </header>
-    {mentor && <CvPanel call={call} org={orgId} path={path.replace(/\/plans$/, "/cv")} startPlan={startFromCv} />}
+    {mentor && plans.data && <details className="starting-profile" open={!continuing}>
+      <summary><Icon name="user" size={16} /><span>Starting profile</span><span className="fine">{continuing ? 'CV and initial recommendations' : 'Optional context for the first plan'}</span><Icon name="arrow" size={14} /></summary>
+      <CvPanel call={call} org={orgId} path={path.replace(/\/plans$/, "/cv")} startPlan={continuing ? undefined : startFromCv} />
+    </details>}
+    {mentor && continuing && !draft && <div className="planning-context">
+      <div><h3>Build on the last period</h3><p>The next plan uses recorded work, feedback and current project priorities.</p></div>
+      <div className="planning-counts">
+        <span><b>{counts.completed}</b> completed</span><span><b>{counts.remaining}</b> unfinished</span><span><b>{counts.review}</b> awaiting review</span>
+      </div>
+      {counts.review > 0 && <p className="planning-review"><Icon name="clock" size={15} />Review pending submissions before assigning dependent work.</p>}
+    </div>}
     {mentor && !draft && ai.data && !ai.data.configured && <p className="fine">AI drafting is off on this server. You can still write plans manually.</p>}
     {mentor && ai.error && !draft && <p className="fine">Could not check whether AI drafting is available.</p>}
-    <Modal open={generating} wide onClose={() => setGenerating(false)} title={`Draft the next period for ${internLabel}`}
-      description="Based on this internship’s open tasks, reviews and shared notes. Files are not sent. Nothing is saved or assigned until you approve.">
+    <Modal open={generating} wide onClose={() => setGenerating(false)} title={`${continuing ? "Plan the next period" : "Create the first plan"} for ${internLabel}`}
+      description={continuing ? "Uses recorded progress, feedback and unfinished work. Review the draft before assigning it." : "Uses the saved starting profile when available, the project and your goals."}>
       <GenerateDraft call={call} path={path} starts={starts} ends={ends} defaultStart={startDate} initial={lastRequest}
         onCancel={() => setGenerating(false)}
         onManual={request => { setLastRequest(request); blank({ starts_on: request.starts_on, ends_on: request.ends_on, goal: request.goal, project: request.project }) }}
@@ -197,15 +218,23 @@ export function Plans({ call, orgId, path, starts, ends, mentor, tasks, openTask
               {plan.draft.new_tasks.map((task, i) => <li key={i}><Badge tone="brand">New</Badge>
                 <span className="grow"><b>{task.title}</b><span className="row-sub">{task.criteria}</span></span><span className="muted">{formatDate(task.due_on)}</span></li>)}
             </ul>
-            {mentor && <div className="actions actions-end">
-              <button className="ghost danger-text" disabled={pending || !!draft} onClick={async () => {
+            {cardError?.id === plan.id && <ErrorNote message={cardError.message} />}
+            {(mentor || admin) && <div className="actions actions-end">
+              <button className="ghost danger-text" disabled={pending} onClick={async () => {
                 if (!await confirmAction(`Delete the draft “${plan.title}”? Nothing was assigned yet, so no tasks are removed.`, 'Delete draft', true)) return
-                void run(async () => { await call(path + '/' + plan.id, { method: 'DELETE' }); plans.reload() })
+                setCardError(null)
+                setPending(true)
+                try {
+                  await call(path + '/' + plan.id, { method: 'DELETE' })
+                  plans.setData(current => current?.filter(item => item.id !== plan.id) ?? current)
+                } catch (failure) {
+                  setCardError({ id: plan.id, message: failure instanceof Error ? failure.message : 'Could not delete the draft.' })
+                } finally { setPending(false) }
               }}>Delete draft</button>
-              <button className="secondary" disabled={pending || !!draft} onClick={() => edit(plan)}>Edit draft</button>
-              <button disabled={pending || !!draft} onClick={() => publish(plan)}>
+              {mentor && <button className="secondary" disabled={pending || !!draft} onClick={() => edit(plan)}>Edit draft</button>}
+              {mentor && <button disabled={pending || !!draft} onClick={() => publish(plan)}>
                 {pending && phase === 'publishing' ? <span className="btn-spinner" aria-hidden="true" /> : <Icon name="check" size={16} />}
-                {pending && phase === 'publishing' ? 'Assigning tasks…' : 'Approve and assign'}</button>
+                {pending && phase === 'publishing' ? 'Assigning tasks…' : 'Approve and assign'}</button>}
             </div>}
           </>}
         </li>

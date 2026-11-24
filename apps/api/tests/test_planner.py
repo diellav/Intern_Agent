@@ -260,3 +260,22 @@ def test_status_reports_configuration(client):
     assert client.get(f"/api/organizations/{uuid4()}/ai/status").json() == {"configured": False, "model": None}
     app.dependency_overrides[planner_provider] = lambda: FakeProvider("{}")
     assert client.get(f"/api/organizations/{uuid4()}/ai/status").json() == {"configured": True, "model": "fake-model"}
+
+
+def test_submitted_task_is_not_carried_as_new_work():
+    from copy import deepcopy
+    context = deepcopy(CONTEXT)
+    context["open"]["T1"]["status"] = "submitted"
+    draft, _, _, warnings = validate_proposal(proposal(), context, REQUEST)
+    assert draft.carry == []
+    assert any("awaiting review" in warning for warning in warnings)
+    assert len(draft.new_tasks) == 1
+
+
+def test_completed_work_is_not_recreated():
+    duplicate = {"title": "Build the form", "criteria": "Already done.", "due_on": "2026-11-20",
+                 "reason": "Repeat", "estimated_hours": 2, "evidence_refs": ["C1"]}
+    draft, _, _, warnings = validate_proposal(proposal(new_tasks=[duplicate]), CONTEXT, REQUEST)
+    assert draft.new_tasks == []
+    assert draft.carry == [OPEN_A]
+    assert any("duplicates" in warning for warning in warnings)

@@ -157,7 +157,11 @@ def publish_plan(org_id: UUID, internship_id: UUID, plan_id: UUID, actor: Actor,
 def delete_plan(org_id: UUID, internship_id: UUID, plan_id: UUID, actor: Actor):
     """Deletes an unpublished draft. Published plans stay: their tasks were assigned and the intern notified."""
     with deps.program_connection(actor, org_id) as connection:
-        plan_parent(connection, org_id, internship_id, actor)
+        parent = assignment(connection, org_id, internship_id)
+        role = connection.execute(text("select role from app.memberships where org_id=:org and user_id=:actor and active"),
+                                  {"org": org_id, "actor": actor}).scalar()
+        if role != "admin" and parent["mentor_id"] != actor:
+            raise HTTPException(403, "Only the assigned mentor or an admin can delete this draft.")
         record = plan_record(connection, internship_id, plan_id)
         if record["published_at"]:
             raise HTTPException(409, "Published plans can’t be deleted because their tasks are already assigned.")

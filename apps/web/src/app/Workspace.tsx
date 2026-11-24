@@ -3,8 +3,9 @@ import { ProgressReports } from '../features/progress/ProgressReports'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, useResource, type Call, type Membership, type Role } from '../lib/api'
-import { Avatar, ErrorNote, Icon, Modal, displayName, type IconName, ConfirmHost } from '../ui'
+import { Avatar, ErrorNote, Icon, Modal, displayName, setAvatarLoader, type IconName, ConfirmHost } from '../ui'
 import { Overview } from '../features/overview/Overview'
+import { PlansPage } from '../features/plans/PlansPage'
 import { JiraOverview } from '../features/jira/JiraOverview'
 import { Internships } from '../features/internships/Internships'
 import { InternshipPicker } from '../features/internships/InternshipPicker'
@@ -109,10 +110,24 @@ function NameDialog({ open, me, call, onClose, onSaved }: { open: boolean; me: M
 
 export function Workspace({ session, call: rawCall, memberships, me: initialMe }: { session: Session; call: Call; memberships: Membership[]; me: Me }) {
   const { call, busy } = useActivity(rawCall)
-  const [selected, setSelected] = useState(memberships[0].organization_id)
+  // Remember the chosen workspace, so a refresh stays where you were.
+  const [selected, setSelected] = useState(() => {
+    try {
+      const saved = localStorage.getItem('workspace-org')
+      if (saved && memberships.some(item => item.organization_id === saved)) return saved
+    } catch { /* storage unavailable: use the first workspace */ }
+    return memberships[0].organization_id
+  })
+  useEffect(() => { try { localStorage.setItem('workspace-org', selected) } catch { /* not critical */ } }, [selected])
   const membership = memberships.find(item => item.organization_id === selected) ?? memberships[0]
   const org = membership.organization_id
   const role = membership.role
+  // Profile pictures by email (from Jira); people without one keep their initials.
+  useEffect(() => {
+    setAvatarLoader(emails => rawCall<Record<string, string | null>>(
+      `/api/organizations/${org}/avatars?` + emails.map(email => 'email=' + encodeURIComponent(email)).join('&')))
+    return () => setAvatarLoader(null)
+  }, [org, rawCall])
   const [me, setMe] = useState(initialMe)
   const [view, setView] = useState<View>(() => parseView(location.hash))
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -284,7 +299,8 @@ export function Workspace({ session, call: rawCall, memberships, me: initialMe }
             ? <Internships call={call} orgId={org} role={role} view={view.tab === 'assignments' ? { tab: 'internships' } : view} navigate={navigate} manage={view.tab === 'assignments'} />
           : view.tab === 'progress' ? <ProgressReports canEdit={role !== 'intern'} key={org} call={call} orgId={org} openTask={openTask} />
           : view.tab === 'calendar' ? <Calendar call={call} orgId={org} role={role} openTask={openTask} />
-          : view.tab === 'plans' ? <InternshipPicker call={call} orgId={org} role={role} purpose="plan" open={(id, replace) => openSection(id, 'plan', replace)} />
+          : view.tab === 'plans' ? <PlansPage call={call} orgId={org} role={role} openTask={(internshipId, taskId) => openTask(internshipId, taskId)}
+            taskHref={(internshipId, taskId, version) => formatView({ tab: 'internships', internshipId, section: 'tasks', taskId, version: version ?? undefined })} />
           : view.tab === 'notes' ? <InternshipPicker call={call} orgId={org} role={role} purpose="notes" open={(id, replace) => openSection(id, 'notes', replace)} />
           : view.tab === 'reviews' ? <TaskQueue call={call} orgId={org} role={role} openTask={openTask} />
           : view.tab === 'projects' ? <Projects call={call} orgId={org} role={role} />

@@ -9,11 +9,17 @@ for the plan's content only.
 
 Rules:
 - Plan only for requested_plan.starts_on to requested_plan.ends_on.
+- For first_plan, use starting_profile as saved initial learning context when available.
+  Align it with the assigned project. CV statements are not evidence of completed work.
+- For next_period, build on recorded completed work, feedback and unfinished tasks.
+  Do not restart completed exercises. Without submissions, do not infer progress or skills.
+- Submitted tasks await a mentor decision. Do not carry or duplicate them as fresh work.
+  Do not assume an unreviewed submission has passed when assigning dependent work.
 - carry: open tasks to keep working on, by their "ref" (e.g. "T1"). Use only refs listed in open_tasks.
   Prefer tasks with requested changes or near deadlines. Carrying work only, with no new tasks, is fine.
 - new_tasks: concrete tasks that move toward the focus. Each due_on is YYYY-MM-DD within the plan period.
   Criteria are short, checkable statements. Do not repeat an existing open task.
-- When internship.project is given, new tasks are real contributions to that project: take them from its
+- When project is given, new tasks are real contributions to that project: take them from its
   intern_areas and current_focus, in its tech_stack. Learning tasks only when they unblock that work
   (setup, reading the code an upcoming task touches). Never invent exercises unrelated to the project.
 - When project.open_jira_issues is given, prefer those issues (unassigned ones first) and set jira_key to the

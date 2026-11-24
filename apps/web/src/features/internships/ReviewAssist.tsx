@@ -5,10 +5,12 @@ import { ErrorNote, Icon } from '../../ui'
 
 export type Assist = { ai_usage_id?: string;
   summary: string
+  previous_feedback?: { point: string; status: 'addressed' | 'partly' | 'not_addressed' | 'unclear'; evidence: string }[]
   criteria: { criterion: string; status: 'met' | 'not_met' | 'unclear'; evidence: string }[]
   suggested_feedback: string
   check: string[]
   suggested_decision: 'completed' | 'changes_requested' | null
+  sources?: { source: string; kind: string; status: string; detail: string }[]
   model: string
 }
 
@@ -30,8 +32,8 @@ export function ReviewAssist({ call, path, submissionId, version, sent, onUse }:
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   if (!ai.data?.configured) return null
-  const read = [sent.description ? 'the description' : null, sent.links ? `${sent.links} link title${sent.links === 1 ? '' : 's'}` : null,
-    sent.files ? `${sent.files} file name${sent.files === 1 ? '' : 's'}` : null].filter(Boolean).join(', ') || 'nothing written'
+  const read = [sent.description ? 'the description' : null, sent.links ? `${sent.links} linked page${sent.links === 1 ? '' : 's'}` : null,
+    sent.files ? `${sent.files} attachment${sent.files === 1 ? '' : 's'}` : null].filter(Boolean).join(', ') || 'nothing written'
 
   async function run() {
     if (pending) return
@@ -51,7 +53,7 @@ export function ReviewAssist({ call, path, submissionId, version, sent, onUse }:
       {pending ? <span className="btn-spinner dark" aria-hidden="true" /> : <Icon name="sparkle" size={15} />}
       {pending ? `Reading version ${version}…` : error ? 'Try again' : 'Get AI suggestions'}</button>
     {pending && <Elapsed />}
-    <span className="muted">Reads {read}. File contents and linked pages are not opened.</span>
+    <span className="muted">Reads {read}. Opens supported attachments and public links. Sources requiring sign-in are flagged for manual review.</span>
     {error && <ErrorNote message={error} />}
   </div>
 
@@ -59,11 +61,27 @@ export function ReviewAssist({ call, path, submissionId, version, sent, onUse }:
     <AiVote key={assist.ai_usage_id} call={call} org={path.split("/")[3]} id={assist.ai_usage_id} />
     <header className="assist-head">
       <p className="label"><Icon name="sparkle" size={14} />AI suggestions for version {version}</p>
-      <span className="muted">Read: {read} · {assist.model}</span>
+      <span className="muted">Submission: {read} · {assist.model}</span>
     </header>
     <div className="assist-block">
+      {!!assist.sources?.length && <details className="feature-disclosure">
+        <summary>Sources inspected · {assist.sources.filter(source => source.status !== 'unread').length}/{assist.sources.length}</summary>
+        <ul className="review-source-list">{assist.sources.map((source, index) => <li key={index}>
+          <span><strong>{source.source}</strong><span className="fine">{source.detail}</span></span>
+          <span className={source.status === 'unread' ? 'badge badge-warn' : 'badge badge-success'}>{source.status === 'unread' ? 'Manual check' : source.status === 'image' ? 'Image analyzed' : 'Text read'}</span>
+        </li>)}</ul>
+      </details>}
       <h4>Findings</h4>
       <p>{assist.summary}</p>
+      {!!assist.previous_feedback?.length && <>
+        <h4>Earlier feedback</h4>
+        <ul className="assist-criteria">{assist.previous_feedback.map(item => <li key={item.point}>
+          <span className={`assist-status ${item.status === 'addressed' ? 'met' : item.status === 'not_addressed' ? 'not_met' : 'unclear'}`}>
+            {item.status === 'addressed' ? 'Addressed' : item.status === 'partly' ? 'Partly' : item.status === 'not_addressed' ? 'Not addressed' : 'Unclear'}</span>
+          <span className="grow"><b>{item.point}</b><span className="muted">{item.evidence}</span></span>
+        </li>)}</ul>
+        <h4>Acceptance criteria</h4>
+      </>}
       {assist.criteria.length > 0 && <ul className="assist-criteria">{assist.criteria.map(item => <li key={item.criterion}>
         <span className={`assist-status ${item.status}`}>{statusText[item.status]}</span>
         <span className="grow"><b>{item.criterion}</b><span className="muted">{item.evidence}</span></span>

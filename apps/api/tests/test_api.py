@@ -55,3 +55,15 @@ def test_retired_question_routes_are_unavailable():
     from app.main import app
     paths = app.openapi()["paths"]
     assert not any("/questions" in path or "/answers" in path for path in paths)
+
+
+def test_browser_may_send_every_method_the_api_uses():
+    """The browser preflights PUT and DELETE; a missing method blocks the request before it reaches the API."""
+    from fastapi.testclient import TestClient
+    from app.main import app, settings
+    client = TestClient(app)
+    for method in ("GET", "POST", "PUT", "DELETE"):
+        response = client.options("/api/organizations/x/internships/y/plans/z", headers={
+            "Origin": settings().frontend_origin, "Access-Control-Request-Method": method,
+            "Access-Control-Request-Headers": "authorization,content-type"})
+        assert response.status_code == 200, method

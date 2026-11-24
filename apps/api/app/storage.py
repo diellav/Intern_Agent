@@ -59,6 +59,18 @@ class SupabaseStorage:
             raise StorageError("sign")
         return f"{self._base}{signed}&download={quote(file_name)}"
 
+    def read(self, path: str, limit: int) -> bytes:
+        with self._client.stream("GET", f"{self._base}/object/{self._object(path)}",
+                                 headers=self._headers()) as response:
+            if response.status_code != 200:
+                raise StorageError("read")
+            result = bytearray()
+            for chunk in response.iter_bytes():
+                if len(result) + len(chunk) > limit:
+                    raise StorageError("too_large")
+                result.extend(chunk)
+        return bytes(result)
+
     def remove(self, paths: list[str]) -> None:
         if not paths:
             return

@@ -112,7 +112,59 @@ export function initials(name?: string | null, email?: string | null) {
   return (email ?? '?').slice(0, 1).toUpperCase()
 }
 
+// Profile pictures, loaded in small batches by email. Unknown or failed ones fall back to initials.
+type AvatarLoader = (emails: string[]) => Promise<Record<string, string | null>>
+let avatarLoader: AvatarLoader | null = null
+let avatarGeneration = 0
+let avatarTimer: ReturnType<typeof setTimeout> | undefined
+const avatarUrls = new Map<string, string | null>()
+const avatarWaiting = new Set<string>()
+const avatarListeners = new Set<() => void>()
+
+export function setAvatarLoader(loader: AvatarLoader | null) {
+  avatarLoader = loader
+  avatarGeneration += 1
+  avatarUrls.clear()
+  avatarWaiting.clear()
+  avatarListeners.forEach(listener => listener())
+}
+
+function requestAvatar(email: string) {
+  if (!avatarLoader || avatarUrls.has(email) || avatarWaiting.has(email)) return
+  avatarWaiting.add(email)
+  clearTimeout(avatarTimer)
+  avatarTimer = setTimeout(async () => {
+    const batch = [...avatarWaiting].slice(0, 50)
+    batch.forEach(item => avatarWaiting.delete(item))
+    const loader = avatarLoader
+    let found: Record<string, string | null> = {}
+    try { if (loader) found = await loader(batch) } catch { /* keep initials */ }
+    if (loader !== avatarLoader) return
+    batch.forEach(item => avatarUrls.set(item, found[item] ?? null))
+    avatarListeners.forEach(listener => listener())
+    if (avatarWaiting.size) requestAvatar([...avatarWaiting][0])
+  }, 40)
+}
+
+function useAvatarUrl(email?: string | null) {
+  const key = email?.trim().toLowerCase() ?? ''
+  const [, rerender] = useState(0)
+  const generation = avatarGeneration
+  useEffect(() => {
+    if (!key) return
+    const listener = () => rerender(n => n + 1)
+    avatarListeners.add(listener)
+    requestAvatar(key)
+    return () => { avatarListeners.delete(listener) }
+  }, [key, generation])
+  return key ? avatarUrls.get(key) ?? null : null
+}
+
 export function Avatar({ name, email, size = 'md' }: { name?: string | null; email?: string | null; size?: 'sm' | 'md' | 'lg' }) {
+  const url = useAvatarUrl(email)
+  const [broken, setBroken] = useState<string>()
+  if (url && url !== broken) return <img className={`avatar avatar-img avatar-${size}`} src={url} alt="" aria-hidden="true"
+    referrerPolicy="no-referrer" onError={() => setBroken(url)} />
   return <span className={`avatar avatar-${size}`} aria-hidden="true">{initials(name, email)}</span>
 }
 

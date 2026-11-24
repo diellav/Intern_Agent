@@ -52,6 +52,9 @@ def validate_proposal(raw: str, context: dict, data: GenerateInput) -> tuple[Dra
         if row is None:
             warnings.append("Ignored a carried task the AI referenced that is not open in this internship.")
             continue
+        if row.get("status") == "submitted":
+            warnings.append(f"“{row['title']}” is awaiting review. Review it before assigning follow-up work.")
+            continue
         if row["id"] in carry:
             continue
         carry.append(row["id"])
@@ -63,7 +66,7 @@ def validate_proposal(raw: str, context: dict, data: GenerateInput) -> tuple[Dra
         carry_notes[str(row["id"])] = ItemNote(reason=item.reason, hours=estimate, evidence=cited,
                                                confirm=[] if estimate is not None else ["No hour estimate for the remaining work."])
 
-    existing = {_key(row["title"]) for row in open_tasks.values()}
+    existing = {_key(row["title"]) for row in known.values()}
     seen: set[str] = set()
     linked: set[str | None] = set(context.get("jira_taken", ()))
     new_tasks: list[DraftTask] = []
