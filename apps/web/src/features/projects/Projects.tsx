@@ -96,7 +96,7 @@ function ProjectForm({ open, call, path, project, admin, suggested, onClose, onS
 }
 
 /** Where the project stands on its Jira board, kept current by syncing and the agent's running brief. */
-function JiraPanel({ call, path, project, onBrief }: { call: Call; path: string; project: Project; onBrief: (brief: Brief | null) => void }) {
+function JiraPanel({ call, path, project, onBrief, analyse }: { call: Call; path: string; project: Project; onBrief: (brief: Brief | null) => void; analyse: boolean }) {
   const jira = useResource<JiraStatus>(call, `${path}/${project.id}/jira`)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
@@ -134,7 +134,7 @@ function JiraPanel({ call, path, project, onBrief }: { call: Call; path: string;
       <div className="actions">
         <button className="secondary sm" disabled={Boolean(busy)} onClick={() => run('Syncing with Jira…', `${path}/${project.id}/jira/sync`)}>
           {busy === 'Syncing with Jira…' ? <span className="btn-spinner" aria-hidden="true" /> : <Icon name="refresh" size={15} />}{busy === 'Syncing with Jira…' ? 'Syncing…' : 'Sync now'}</button>
-        {counts.total > 0 && <button className="ghost sm" disabled={Boolean(busy)} onClick={() => run('Analysing…', `${path}/${project.id}/brief`)}>
+        {analyse && counts.total > 0 && <button className="ghost sm" disabled={Boolean(busy)} onClick={() => run('Analysing…', `${path}/${project.id}/brief`)}>
           {busy === 'Analysing…' ? <span className="btn-spinner" aria-hidden="true" /> : <Icon name="sparkle" size={15} />}{busy === 'Analysing…' ? 'Analysing…' : 'Analyse again'}</button>}
       </div>
     </header>
@@ -174,7 +174,7 @@ function ProjectDetail({ call, path, project, role, back, onChanged }: {
 }) {
   const [editing, setEditing] = useState(false)
   const [brief, setBrief] = useState<Brief | null>(null)
-  const staff = role !== 'intern'
+  const staff = role === 'admin' || role === 'mentor'
   return <div className="stack">
     <header className="profile-head">
       <button className="back-link" onClick={back}><Icon name="back" size={16} />All projects</button>
@@ -192,7 +192,7 @@ function ProjectDetail({ call, path, project, role, back, onChanged }: {
       {project.intern_areas && <p><b>Interns can help with:</b> {project.intern_areas}</p>}
       {!project.description && !project.current_focus && <p className="fine">No description yet.</p>}
     </section>
-    {staff && <JiraPanel call={call} path={path} project={project} onBrief={setBrief} />}
+    {role !== 'intern' && <JiraPanel call={call} path={path} project={project} onBrief={setBrief} analyse={staff} />}
   </div>
 }
 
@@ -210,9 +210,9 @@ export function Projects({ call, orgId, role }: { call: Call; orgId: string; rol
       <p className="grow muted">{staff
         ? 'The company work interns join. Link a Jira board and the agent follows it: modules, progress and where interns can help.'
         : 'The project you are working on.'}</p>
-      {staff && <button onClick={() => setCreating(true)}><Icon name="plus" size={16} />Add project</button>}
+      {(role === 'admin' || role === 'mentor') && <button onClick={() => setCreating(true)}><Icon name="plus" size={16} />Add project</button>}
     </div>
-    {staff && <ProjectForm open={creating} call={call} path={path} project={null} admin={role === 'admin'}
+    {(role === 'admin' || role === 'mentor') && <ProjectForm open={creating} call={call} path={path} project={null} admin={role === 'admin'}
       onClose={() => setCreating(false)} onSaved={projects.reload} />}
     {projects.error && <ErrorNote message={projects.error} onRetry={projects.reload} />}
     {!projects.data && !projects.error && <div className="card-grid">{[0, 1].map(i => <div key={i} className="skeleton" style={{ height: '10rem', borderRadius: 'var(--r-lg)' }} />)}</div>}

@@ -1,5 +1,4 @@
 import { AiVote } from '../ai/AiUsage'
-import { CvPanel, type Analysis } from '../ai/CvPanel'
 import { useRef, useState, type FormEvent } from 'react'
 import { useResource, type Call } from '../../lib/api'
 import { Badge, Empty, ErrorNote, Icon, Loading, Modal, formatDate, type Tone, confirmAction } from '../../ui'
@@ -63,14 +62,6 @@ export function Plans({ call, orgId, path, starts, ends, mentor, admin = false, 
     const end = offset(startDate, 6)
     setGenerated(null)
     open({ title: '', goal: '', project: '', starts_on: startDate, ends_on: end > ends ? ends : end, carry: [], new_tasks: [], ...seed })
-  }
-
-  function startFromCv(analysis: Analysis) {
-    const newTasks = (analysis.starter_tasks ?? []).map(task => {
-      const due = offset(startDate, task.day - 1)
-      return { title: task.title, criteria: task.criteria, due_on: due > ends ? ends : due, jira_key: task.jira_key ?? null }
-    })
-    blank({ title: analysis.title, goal: analysis.goal, new_tasks: newTasks })
   }
 
   function close() {
@@ -155,10 +146,6 @@ export function Plans({ call, orgId, path, starts, ends, mentor, admin = false, 
           title={ai.data && !ai.data.configured ? 'AI drafting is not configured on the server' : undefined}><Icon name="sparkle" size={16} />{continuing ? "Plan next period" : "Create first plan"}</button>
       </div>}
     </header>
-    {mentor && plans.data && <details className="starting-profile" open={!continuing}>
-      <summary><Icon name="user" size={16} /><span>Starting profile</span><span className="fine">{continuing ? 'CV and initial recommendations' : 'Optional context for the first plan'}</span><Icon name="arrow" size={14} /></summary>
-      <CvPanel call={call} org={orgId} path={path.replace(/\/plans$/, "/cv")} startPlan={continuing ? undefined : startFromCv} />
-    </details>}
     {mentor && continuing && !draft && <div className="planning-context">
       <div><h3>Build on the last period</h3><p>The next plan uses recorded work, feedback and current project priorities.</p></div>
       <div className="planning-counts">

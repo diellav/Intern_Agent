@@ -180,16 +180,16 @@ function InternOverview({ data, me, actions, call, orgId }: { data: Queue; me: M
   </div>
 }
 
-function AdminOverview({ call, orgId, me, data, actions }: { call: Call; orgId: string; me: Me; data: Queue; actions: Actions }) {
+function AdminOverview({ call, orgId, me, data, actions, hr = false }: { call: Call; orgId: string; me: Me; data: Queue; actions: Actions; hr?: boolean }) {
   const programs = useResource<Program[]>(call, `/api/organizations/${orgId}/programs`)
   const internships = useResource<Internship[]>(call, `/api/organizations/${orgId}/internships`)
   const attention = internships.data?.filter(item => item.submitted_count > 0 || item.task_count === 0) ?? []
   return <div className="dashboard">
-    <Hero me={me} summary="Your organization’s programs and assignments.">
-      <div className="hero-actions">
+    <Hero me={me} summary={hr ? 'Every intern, what they work on and who may need help.' : 'Your organization’s programs and assignments.'}>
+      {!hr && <div className="hero-actions">
         <button className="secondary" onClick={() => actions.go('programs')}><Icon name="plus" size={16} />Program</button>
         <button onClick={() => actions.go('assignments')}><Icon name="plus" size={16} />Assignment</button>
-      </div>
+      </div>}
     </Hero>
     <div className="stat-strip">
       {([['Internships', internships.data?.length ?? '–'], ['Open tasks', data.counts.open], ['Waiting for review', data.counts.submitted],
@@ -231,9 +231,9 @@ export function Overview({ call, orgId, role, me, actions }: { call: Call; orgId
   if (queue.error) return <ErrorNote message="Could not load your overview." onRetry={queue.reload} />
   if (!data) return <OverviewSkeleton />
   // Main work first; risk signals below and only when there are any.
-  if (role === 'admin' || role === 'mentor') return <div className="stack">
+  if (role !== 'intern') return <div className="stack">
     <Guide role={role} go={actions.go} />
-    {role === 'admin' ? <AdminOverview call={call} orgId={orgId} me={me} data={data} actions={actions} />
+    {role === 'admin' || role === 'hr' ? <AdminOverview call={call} orgId={orgId} me={me} data={data} actions={actions} hr={role === 'hr'} />
       : <MentorOverview data={data} me={me} actions={actions} call={call} orgId={orgId} />}
     <Attention key={orgId} call={call} orgId={orgId} openTask={actions.openTask} />
   </div>

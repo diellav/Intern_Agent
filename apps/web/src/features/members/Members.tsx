@@ -5,7 +5,7 @@ import { ErrorNote, Loading, Modal } from '../../ui'
 type Member = { id: string; email: string; full_name: string | null; role: string; status: 'active' | 'inactive' | 'pending' }
 
 type Props = { call: Call; orgId: string; userId: string }
-type Role = 'admin' | 'mentor' | 'intern'
+type Role = 'admin' | 'mentor' | 'intern' | 'hr'
 
 /** Keyed by organization so switching workspaces never shows another org's rows or notices. */
 export function Members(props: Props) {
@@ -75,7 +75,7 @@ function MembersPanel({ call, orgId, userId }: Props) {
         <select aria-label={`Role for ${member.full_name || member.email}`} value={member.role}
           disabled={busy || member.id === userId} title={member.id === userId ? 'You cannot change your own role.' : undefined}
           onChange={event => changeRole(member, event.target.value as Role)}>
-          <option value="intern">Intern</option><option value="mentor">Mentor</option><option value="admin">Admin</option>
+          <option value="intern">Intern</option><option value="mentor">Mentor</option><option value="hr">HR</option><option value="admin">Admin</option>
         </select></label>}
       {member.status === 'pending' && <button className="secondary sm" disabled={busy} onClick={() => void act(path + '/' + member.id + '/resend', 'Invitation resent.')}>Resend</button>}
       {member.id !== userId && member.status !== 'inactive' && <button className="ghost sm" disabled={busy} onClick={() => { setError(''); setRemoving(member) }}>Remove</button>}
@@ -84,7 +84,7 @@ function MembersPanel({ call, orgId, userId }: Props) {
       {open && <form onSubmit={invite}>
         <label>Full name<input name="full_name" required maxLength={120} /></label>
         <label>Email<input name="email" type="email" required maxLength={254} /></label>
-        <label>Role<select name="role" defaultValue="intern"><option value="intern">Intern</option><option value="mentor">Mentor</option><option value="admin">Admin</option></select></label>
+        <label>Role<select name="role" defaultValue="intern"><option value="intern">Intern</option><option value="mentor">Mentor</option><option value="hr">HR</option><option value="admin">Admin</option></select></label>
         {error && <ErrorNote message={error} />}
         <div className="modal-actions"><button disabled={busy}>{busy ? 'Adding…' : 'Invite member'}</button></div>
       </form>}

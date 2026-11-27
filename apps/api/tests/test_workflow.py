@@ -214,11 +214,9 @@ def test_ai_draft_edit_publish_flow(monkeypatch):
                         raise HTTPException(404)
                     yield connection
 
-            from app import ai_control, cv, progress
-            from io import BytesIO
-            from zipfile import ZipFile
+            from app import ai_control, progress
 
-            for module in (ai_control, cv, progress):
+            for module in (ai_control, progress):
                 monkeypatch.setattr(module, "program_connection", scoped)
             monkeypatch.setattr(settings(), "ai_requests_per_hour", 1)
             fake = Fake()
@@ -290,59 +288,16 @@ def test_ai_draft_edit_publish_flow(monkeypatch):
                 shared_report = client.get(report_path + "/reports").json()[0]
                 assert shared_report["summary"] == "Shared progress" and shared_report["findings"] == []
                 assert shared_report["snapshot"]["start"] == dates["start"]  # numbers saved with the shared report
-                actor = other_mentor
-                cv_path = f"{base}/internships/{internship}/cv"
-                assert client.get(cv_path).status_code == 404
-                actor = mentor  # the assigned mentor uploads and analyses the CV
-                assert client.post(cv_path + "/analyze").status_code == 422
-                document = BytesIO()
-                with ZipFile(document, "w") as archive:
-                    archive.writestr("word/document.xml", """<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-                        <w:p><w:r><w:t>Sample Intern</w:t></w:r></w:p>
-                        <w:p><w:r><w:t>fictional@example.test</w:t></w:r></w:p>
-                        <w:p><w:r><w:t>Built accessible React forms and wrote automated validation tests.</w:t></w:r></w:p>
-                        </w:document>""")
-                mime = {"Content-Type": cv.DOCX}
-                assert client.put(cv_path, content=document.getvalue(), headers=mime).status_code == 422
-                invalid = client.put(cv_path + "?consent=true", content=b"invalid", headers=mime)
-                assert invalid.status_code == 422
-                uploaded = client.put(cv_path + "?consent=true", content=document.getvalue(), headers=mime)
-                assert uploaded.status_code == 200, uploaded.text
-
+                actor = mentor
                 project = client.post(base + "/projects", json={"name": "Client portal", "tech_stack": "React, FastAPI",
                     "intern_areas": "Form validation and accessibility fixes", "jira_key": "CP"})
                 assert project.status_code == 201, project.text
                 project_id = project.json()["id"]
                 assert client.put(f"{base}/internships/{internship}/project", json={"project_id": project_id}).status_code == 200
 
-                class CvFake:
-                    model = "fake-cv"
-                    def complete(self, messages, schema):
-                        assert "fictional@example.test" not in messages[1]["content"]
-                        assert "React forms" in messages[1]["content"]
-                        assert "Form validation and accessibility fixes" in messages[1]["content"]  # the project reaches the AI
-                        assert '"CP"' not in messages[1]["content"]  # Jira and repository links do not
-                        return jsonlib.dumps({
-                            "project_fit": [{"project_id": project_id, "fit": "strong", "why": "React forms match."}],
-                            "learn_first": ["FastAPI"], "title": "React practice", "goal": "Build and test an accessible form.",
-                            "starter_tasks": [{"title": "Build a form", "jira_key": "CP-404", "why": "Uses React forms.",
-                                               "criteria": "Validate required fields", "day": 1}]})
-
-                provider["value"] = CvFake()
-                analysis = client.post(cv_path + "/analyze")
-                assert analysis.status_code == 200, analysis.text
-                assert analysis.json()["project_fit"][0]["project_name"] == "Client portal"
-                assert analysis.json()["starter_tasks"][0]["jira_key"] is None  # not an open issue of the project: dropped
                 actor = intern  # interns see only their own internship's project, and can't edit it
                 assert [item["name"] for item in client.get(base + "/projects").json()] == ["Client portal"]
                 assert client.post(base + "/projects", json={"name": "Mine"}).status_code == 403
-                actor = intern  # interns can't read, upload or delete the CV
-                assert client.get(cv_path).status_code == 403
-                assert client.delete(cv_path).status_code == 403
-                actor = mentor
-                assert client.get(cv_path).json()["analysis"]["title"] == "React practice"
-                assert client.delete(cv_path).status_code == 200
-                assert client.get(cv_path).json()["analysis"] is None
                 actor = mentor
                 titles = sorted(task["title"] for task in client.get(f"{base}/internships/{internship}/tasks").json())
                 assert titles == ["Add validation tests for the contact form", "Validate the form"]

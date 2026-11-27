@@ -233,8 +233,6 @@ app.include_router(attention_router)
 from app.ai_control import router as ai_control_router
 app.include_router(ai_control_router)
 
-from app.cv import router as cv_router
-app.include_router(cv_router)
 
 from app.avatars import router as avatars_router
 app.include_router(avatars_router)

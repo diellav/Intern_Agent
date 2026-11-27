@@ -31,21 +31,21 @@ function navigation(role: Role): NavGroup[] {
     { label: 'Workspace', items: [
       item('overview', 'Overview', 'home', role === 'mentor' ? 'Reviews waiting for you, then your interns.'
         : role === 'intern' ? 'What to work on next.' : 'Your organization at a glance.'),
-      item('internships', 'Internships', 'briefcase', role === 'admin' ? 'Every internship in your organization.'
+      item('internships', 'Internships', 'briefcase', role === 'admin' || role === 'hr' ? 'Every internship in your organization.'
         : role === 'mentor' ? 'The interns you mentor.' : 'Your internship, plan and history.'),
       item('progress', 'Progress reports', 'layers', 'Review progress and open the supporting work.'),
       item('calendar', 'Calendar', 'calendar', 'Task deadlines you can see, day by day.'),
     ] },
     { label: 'Planning', items: [
       item('projects', 'Projects', 'briefcase', role === 'intern' ? 'The company project you are working on.' : 'Company projects, their Jira boards and where interns can help.'),
-      item('plans', 'Plans', 'layers', role === 'mentor' ? 'Choose an intern to draft or review a plan.' : 'Plans for the internships you can see.'),
+      ...(role !== 'hr' ? [item('plans', 'Plans', 'layers', role === 'mentor' ? 'Choose an intern to draft or review a plan.' : 'Plans for the internships you can see.')] : []),
       role === 'mentor'
         ? item('reviews', 'Reviews', 'check', 'Submissions waiting for your decision.')
         : item('reviews', 'Tasks', 'file', role === 'intern' ? 'All your open tasks.' : 'Open tasks across the organization.'),
     ] },
     { label: 'Updates', items: [item('notifications', 'Notifications', 'bell', 'Everything addressed to you, newest first.')] },
     { label: 'Knowledge', items: [
-      ...(role !== 'admin' ? [item('notes', 'Notes', 'book', role === 'mentor' ? 'Private and shared notes per intern.' : 'Notes your mentor shared with you.')] : []),
+      ...(role === 'mentor' || role === 'intern' ? [item('notes', 'Notes', 'book', role === 'mentor' ? 'Private and shared notes per intern.' : 'Notes your mentor shared with you.')] : []),
       ...(role !== 'admin' ? [item('programs', 'Programs', 'grid', 'Programs and the internships you can open.')] : []),
     ] },
   ]
@@ -297,7 +297,7 @@ export function Workspace({ session, call: rawCall, memberships, me: initialMe }
         </div>
           : view.tab === 'internships' || view.tab === 'assignments'
             ? <Internships call={call} orgId={org} role={role} view={view.tab === 'assignments' ? { tab: 'internships' } : view} navigate={navigate} manage={view.tab === 'assignments'} />
-          : view.tab === 'progress' ? <ProgressReports canEdit={role !== 'intern'} key={org} call={call} orgId={org} openTask={openTask} />
+          : view.tab === 'progress' ? <ProgressReports canEdit={role === 'admin' || role === 'mentor'} readAll={role === 'hr'} key={org} call={call} orgId={org} openTask={openTask} />
           : view.tab === 'calendar' ? <Calendar call={call} orgId={org} role={role} openTask={openTask} />
           : view.tab === 'plans' ? <PlansPage call={call} orgId={org} role={role} openTask={(internshipId, taskId) => openTask(internshipId, taskId)}
             taskHref={(internshipId, taskId, version) => formatView({ tab: 'internships', internshipId, section: 'tasks', taskId, version: version ?? undefined })} />

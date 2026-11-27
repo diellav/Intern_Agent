@@ -62,7 +62,7 @@ export function JiraOverview({ call, orgId, role, me, openInternship, go, guide 
         return <li key={row.internship_id}>
           <button className="row-link overview-row" onClick={() => openInternship(row.internship_id)}>
             <Person name={row.intern_name} email={row.intern_email}
-              detail={[row.project ?? 'No project', role === 'admin' ? `Mentor: ${displayName(row.mentor_name, row.mentor_email)}` : null].filter(Boolean).join(' · ')} />
+              detail={[row.project ?? 'No project', role === 'admin' || role === 'hr' ? `Mentor: ${displayName(row.mentor_name, row.mentor_email)}` : null].filter(Boolean).join(' · ')} />
             <span className="cell progress-cell">{total > 0
               ? <><Progress done={row.done} total={total} /><span className="muted">{row.done} done · {row.in_progress} in progress · {row.to_do} to do</span></>
               : <span className="muted">No Jira issues yet</span>}</span>

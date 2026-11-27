@@ -179,7 +179,7 @@ function Editor({ call, base, internship, period, existing, openTask, refresh }:
   </div>
 }
 
-export function ProgressReports({ call, orgId, openTask, canEdit }: { call: Call; orgId: string; canEdit: boolean; openTask: OpenTask }) {
+export function ProgressReports({ call, orgId, openTask, canEdit, readAll = false }: { call: Call; orgId: string; canEdit: boolean; readAll?: boolean; openTask: OpenTask }) {
   const base = '/api/organizations/' + orgId + '/internships'
   const list = useResource<Internship[]>(call, base)
   const [id, setId] = useState('')
@@ -189,7 +189,8 @@ export function ProgressReports({ call, orgId, openTask, canEdit }: { call: Call
   const reports = saved.data?.filter(report => report.internship_id === selected) ?? []
   const invalid = periodError(period.start, period.end)
   const existing = reports.find(report => report.starts_on === period.start && report.ends_on === period.end)
-  const visible = canEdit ? reports : reports.filter(report => report.shared_at)
+  // HR reads every report, shared or draft, but only mentors and admins write them.
+  const visible = canEdit ? reports : readAll ? reports.filter(report => report.summary) : reports.filter(report => report.shared_at)
 
   if (list.error) return <ErrorNote message={list.error} onRetry={list.reload} />
   if (!list.data) return <section className="panel"><Loading rows={3} /></section>
@@ -217,12 +218,12 @@ export function ProgressReports({ call, orgId, openTask, canEdit }: { call: Call
       call={call} base={base} internship={selected} period={period} existing={existing} openTask={openTask} refresh={saved.reload} />}
 
     <section className="panel">
-      <header className="panel-head"><div><h2>{canEdit ? 'Reports for this internship' : 'Reports shared with you'}</h2>
+      <header className="panel-head"><div><h2>{canEdit || readAll ? 'Reports for this internship' : 'Reports shared with you'}</h2>
         {canEdit && <p>Drafts are visible only to mentors and admins. Open one to continue it.</p>}</div></header>
       {saved.error && <ErrorNote message={saved.error} onRetry={saved.reload} />}
       {!saved.data && !saved.error && <Loading rows={2} />}
-      {saved.data && visible.length === 0 && <p className="empty-line">{canEdit ? 'No reports yet.' : 'Your mentor hasn’t shared a report yet.'}</p>}
-      <div className="grid gap-3">{visible.map(report => report.shared_at
+      {saved.data && visible.length === 0 && <p className="empty-line">{canEdit || readAll ? 'No reports yet.' : 'Your mentor hasn’t shared a report yet.'}</p>}
+      <div className="grid gap-3">{visible.map(report => report.shared_at || !canEdit
         ? <SharedReport key={report.id} report={report} openTask={openTask} />
         : <button key={report.id} type="button" className="row-link compact" onClick={() => setPeriod({ start: report.starts_on, end: report.ends_on })}>
           <span className="row-primary"><span className="row-title">{span(report.starts_on, report.ends_on)}</span>

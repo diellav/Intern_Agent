@@ -13,10 +13,16 @@ const steps: Record<Role, Step[]> = {
     { title: 'Follow progress', detail: 'Overview shows open work, each intern’s Jira progress and who may need help.', tab: 'overview', action: 'Overview' },
   ],
   mentor: [
-    { title: 'Plan the first period', detail: 'Open Plans, choose your intern, analyse their CV against the project and Generate draft. Approve to assign the tasks.', tab: 'plans', action: 'Plans' },
+    { title: 'Plan the first period', detail: 'Open Plans, choose your intern and Generate draft from their program and project. Approve to assign the tasks.', tab: 'plans', action: 'Plans' },
     { title: 'Use the Jira board', detail: 'In the intern’s Jira tab, link their Jira account and assign suggested issues in Jira with one click.', tab: 'internships', action: 'Internships' },
     { title: 'Review submissions', detail: 'Submissions appear in Reviews and your notifications. Use AI suggestions if you like, then approve or request changes.', tab: 'reviews', action: 'Reviews' },
     { title: 'Share a progress report', detail: 'In Progress reports, generate a summary from real evidence, edit it and share it with the intern.', tab: 'progress', action: 'Progress reports' },
+  ],
+  hr: [
+    { title: 'See every intern', detail: 'Overview shows open work, each intern’s Jira progress and who may need help, with the reasons.', tab: 'overview', action: 'Overview' },
+    { title: 'Open an internship', detail: 'Tasks, submissions, reviews, shared notes and Jira work, read-only.', tab: 'internships', action: 'Internships' },
+    { title: 'Read progress', detail: 'Progress reports show recorded work for any period, and the reports mentors wrote.', tab: 'progress', action: 'Progress reports' },
+    { title: 'Know the projects', detail: 'Projects shows each board, its modules and where interns work.', tab: 'projects', action: 'Projects' },
   ],
   intern: [
     { title: 'Start with your next task', detail: 'Overview shows what to do next. Open a task to read what “done” means.', tab: 'overview', action: 'Overview' },
@@ -37,7 +43,7 @@ export function Guide({ role, go }: { role: Role; go: (tab: Tab) => void }) {
   if (hidden) return <button className="ghost sm" style={{ justifySelf: 'start' }} onClick={() => toggle(false)}><Icon name="book" size={15} />How InternAgent works</button>
   return <details className="workflow-help"><summary><Icon name="book" size={16} />How InternAgent works<Icon name="arrow" size={14} /></summary><section className="panel guide" aria-label="How InternAgent works">
     <header className="panel-head">
-      <div><h2>How InternAgent works</h2><p>{role === 'admin' ? 'Set up the organization, then mentors run the internships.' : role === 'mentor' ? 'Your loop each week: plan → review → report.' : 'Your loop: do the task → submit → follow feedback.'}</p></div>
+      <div><h2>How InternAgent works</h2><p>{role === 'admin' ? 'Set up the organization, then mentors run the internships.' : role === 'mentor' ? 'Your loop each week: plan → review → report.' : role === 'hr' ? 'See what every intern is doing, without asking.' : 'Your loop: do the task → submit → follow feedback.'}</p></div>
       <button className="ghost sm" onClick={() => toggle(true)}>Hide</button>
     </header>
     <ol className="guide-steps">{steps[role].map((step, index) => <li key={step.title}>

@@ -7,7 +7,7 @@ export const supabase = VITE_SUPABASE_URL && VITE_SUPABASE_PUBLISHABLE_KEY
   ? createClient(VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY)
   : null
 
-export type Role = 'admin' | 'mentor' | 'intern'
+export type Role = 'admin' | 'mentor' | 'intern' | 'hr'
 export type Membership = { organization_id: string; organization_name: string; role: Role }
 
 /** Authenticated request to the InternAgent API, bound to the current session. */

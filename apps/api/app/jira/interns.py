@@ -37,8 +37,18 @@ def manager(c, org_id, internship_id, actor) -> dict:
     return dict(parent)
 
 
+def viewer(c, org_id, internship_id, actor) -> dict:
+    """The internship, for an admin, HR or its assigned mentor (read only)."""
+    parent = assignment(c, org_id, internship_id)
+    role = c.execute(text("select role from app.memberships where org_id=:org and user_id=:actor and active"),
+                     {"org": org_id, "actor": actor}).scalar()
+    if role not in ("admin", "hr") and parent["mentor_id"] != actor:
+        raise HTTPException(403, "Only an admin, HR or the assigned mentor can see this intern's Jira work.")
+    return dict(parent)
+
+
 def work(c, org_id, internship_id, actor) -> dict:
-    parent = manager(c, org_id, internship_id, actor)
+    parent = viewer(c, org_id, internship_id, actor)
     project = c.execute(text("select id, name, jira_key, jira_synced_at from app.projects where id=:id"),
                         {"id": parent["project_id"]}).mappings().first() if parent["project_id"] else None
     result = {"configured": client.configured(), "browse_url": client.browse_url(), "linked": bool(parent["jira_account_id"]),
@@ -56,7 +66,7 @@ def work(c, org_id, internship_id, actor) -> dict:
         for issue in result["issues"]:
             bucket = {"done": "done", "indeterminate": "in_progress"}.get(issue["status_category"], "to_do")
             result["counts"][bucket] += 1
-    # Suggestions: the brief's intern-friendly issues, then the CV analysis' proposals, while still open and unassigned.
+    # Suggestions: the brief's intern-friendly issues, while still open and unassigned.
     reasons: dict[str, tuple[str, str]] = {}
     brief = c.execute(text("""
         select brief from app.project_briefs where project_id=:id
@@ -64,11 +74,6 @@ def work(c, org_id, internship_id, actor) -> dict:
     """), {"id": project["id"]}).scalar()
     for item in (brief or {}).get("intern_opportunities", []):
         reasons.setdefault(item["issue_key"], (item["why"], "Project analysis"))
-    analysis = c.execute(text("select analysis from app.intern_cvs where internship_id=:id"), {"id": internship_id}).scalar() \
-        if parent["mentor_id"] == actor else None  # the CV analysis is the assigned mentor's only
-    for task in (analysis or {}).get("starter_tasks", []):
-        if task.get("jira_key"):
-            reasons[task["jira_key"]] = (task.get("why") or task["title"], "Fits the intern's CV")
     if reasons:
         rows = c.execute(text(f"""
             select i.key, i.summary, i.issue_type as type, i.status, {epic} from app.jira_issues i
@@ -83,7 +88,7 @@ def work(c, org_id, internship_id, actor) -> dict:
 @router.get("/internships/{internship_id}/jira-work")
 def jira_work(org_id: UUID, internship_id: UUID, actor: Actor):
     with deps.program_connection(actor, org_id) as c:
-        manager(c, org_id, internship_id, actor)
+        viewer(c, org_id, internship_id, actor)
     refresh_jira(actor, org_id, internship_id)  # keeps the copy within 15 minutes of the board
     with deps.program_connection(actor, org_id) as c:
         return work(c, org_id, internship_id, actor)

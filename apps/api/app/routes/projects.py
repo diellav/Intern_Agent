@@ -53,10 +53,11 @@ class ProjectLink(BaseModel):
     project_id: UUID | None
 
 
-def staff(c, org_id, actor):
+def staff(c, org_id, actor, read: bool = False):
+    """Admins and mentors manage projects. With read=True, HR may look too."""
     role = c.execute(text("select role from app.memberships where org_id=:org and user_id=:actor and active"),
                      {"org": org_id, "actor": actor}).scalar()
-    if role not in ("admin", "mentor"):
+    if role not in (("admin", "mentor", "hr") if read else ("admin", "mentor")):
         raise HTTPException(403, "Only admins and mentors can manage projects.")
     return role
 

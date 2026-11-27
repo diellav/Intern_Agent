@@ -50,7 +50,8 @@ export function InternJira({ call, base, internshipId, role, mentor, closed, onP
   const total = data.counts.done + data.counts.in_progress + data.counts.to_do
   return <div className="stack">
     {error && <ErrorNote message={error} />}
-    {!data.linked ? <section className="panel">
+    {!data.linked && !mentor ? <section className="panel"><p className="fine">The intern’s Jira account isn’t linked yet. Their mentor links it here.</p></section>
+    : !data.linked ? <section className="panel">
       <header className="panel-head"><div><h2>Link the intern’s Jira account</h2>
         <p>Enter the email the intern uses in Jira. Only their Jira account ID is kept.</p></div></header>
       <form className="inline-form" onSubmit={linkAccount}>
@@ -79,15 +80,15 @@ export function InternJira({ call, base, internshipId, role, mentor, closed, onP
 
     <section className="panel">
       <header className="panel-head"><div><h2>Where the intern can start</h2>
-        <p>Open, unassigned issues from the board analysis{mentor ? ' and the CV fit' : ''}. Assigning happens in Jira.</p></div></header>
+        <p>Open, unassigned issues from the board analysis. Assigning happens in Jira.</p></div></header>
       {data.suggestions.length === 0 ? <p className="fine">No suggestions right now. Sync the project in Projects to analyse the board again.</p>
         : <ul className="rows">{data.suggestions.map(issue => <li key={issue.key} className="issue-row">
           <span className="row-primary"><span className="row-title">{link(issue.key)} {issue.summary}</span>
             <span className="row-sub">{issue.why} <span className="fine">· {issue.source}</span></span></span>
-          {data.linked && !closed && <button className="secondary sm" disabled={Boolean(busy)} onClick={() => assign(issue.key)}>
+          {mentor && data.linked && !closed && <button className="secondary sm" disabled={Boolean(busy)} onClick={() => assign(issue.key)}>
             {busy === issue.key ? <span className="btn-spinner" aria-hidden="true" /> : <Icon name="plus" size={15} />}Assign in Jira</button>}
         </li>)}</ul>}
-      {!data.linked && data.suggestions.length > 0 && <p className="fine">Link the intern’s Jira account to assign these.</p>}
+      {mentor && !data.linked && data.suggestions.length > 0 && <p className="fine">Link the intern’s Jira account to assign these.</p>}
     </section>
 
   </div>

@@ -9,8 +9,8 @@ for the plan's content only.
 
 Rules:
 - Plan only for requested_plan.starts_on to requested_plan.ends_on.
-- For first_plan, use starting_profile as saved initial learning context when available.
-  Align it with the assigned project. CV statements are not evidence of completed work.
+- For first_plan, start from the intern's program and the assigned project: onboarding first, then small
+  real issues. Do not assume skills that no recorded work shows.
 - For next_period, build on recorded completed work, feedback and unfinished tasks.
   Do not restart completed exercises. Without submissions, do not infer progress or skills.
 - Submitted tasks await a mentor decision. Do not carry or duplicate them as fresh work.

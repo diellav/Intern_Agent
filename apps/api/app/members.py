@@ -17,11 +17,11 @@ class Invitation(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     email: str = Field(max_length=254, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
     full_name: str = Field(min_length=1, max_length=120)
-    role: Literal["admin", "mentor", "intern"]
+    role: Literal["admin", "mentor", "intern", "hr"]
 
 
 class RoleChange(BaseModel):
-    role: Literal["admin", "mentor", "intern"]
+    role: Literal["admin", "mentor", "intern", "hr"]
 
 
 def denied(exc: DBAPIError, message: str):

@@ -26,7 +26,7 @@ def progress(org_id: UUID, internship_id: UUID, actor: Actor, start: date, end: 
             from app.internships i
             join app.memberships m on m.org_id=i.org_id and m.user_id=:actor
             where i.id=:internship and i.org_id=:org and m.active
-              and (m.role='admin' or (m.role='mentor' and i.mentor_id=:actor))
+              and (m.role in ('admin','hr') or (m.role='mentor' and i.mentor_id=:actor))
         """), {"org": org_id, "internship": internship_id, "actor": actor}).scalar()
         if scope is None:
             raise HTTPException(404, "Internship not found")
@@ -136,6 +136,10 @@ def _evidence_key(item) -> tuple:
 def save_report(org_id: UUID, internship_id: UUID, actor: Actor, start: date, end: date, data: ReportInput):
     # Numbers, evidence and AI sources are saved together, from the same moment, on every draft save.
     snapshot = progress(org_id, internship_id, actor, start, end)
+    with program_connection(actor, org_id) as connection:
+        if connection.execute(text("select role from app.memberships where org_id=:org and user_id=:actor and active"),
+                              {"org": org_id, "actor": actor}).scalar() == "hr":
+            raise HTTPException(403, "HR can read and summarise progress; the mentor saves and shares reports.")
     if data.share and not data.summary.strip():
         raise HTTPException(422, "Add a summary before sharing.")
     known = {_evidence_key(item): item for item in snapshot["evidence"]}

@@ -43,7 +43,7 @@ def test_normalise_finds_epics_and_hides_assignees():
 @pytest.mark.skipif(os.environ.get("INTERNAGENT_DB_TEST") != "1", reason="opt-in PostgreSQL rollback test")
 def test_sync_records_changes_and_brief_builds_on_them(monkeypatch):
     engine = create_engine(settings().migration_database_url)
-    admin, mentor, intern = [uuid4() for _ in range(3)]
+    admin, mentor, intern, hr = [uuid4() for _ in range(4)]
     org, program = uuid4(), uuid4()
     actor = mentor
     board = list(BOARD)
@@ -67,10 +67,10 @@ def test_sync_records_changes_and_brief_builds_on_them(monkeypatch):
     with engine.connect() as connection:
         tx = connection.begin()
         try:
-            for user in (admin, mentor, intern):
+            for user in (admin, mentor, intern, hr):
                 connection.execute(text("insert into auth.users (id, email) values (:id,:email)"), {"id": user, "email": f"{user}@example.test"})
             connection.execute(text("insert into app.organizations(id,slug,name) values (:id,:slug,'Jira verification')"), {"id": org, "slug": str(org)})
-            for user, role in [(admin, "admin"), (mentor, "mentor"), (intern, "intern")]:
+            for user, role in [(admin, "admin"), (mentor, "mentor"), (intern, "intern"), (hr, "hr")]:
                 connection.execute(text("insert into app.memberships(org_id,user_id,role) values (:org,:id,:role)"), {"org": org, "id": user, "role": role})
             connection.execute(text("insert into app.programs(id,org_id,name) values (:id,:org,'Cohort')"), {"id": program, "org": org})
             connection.execute(text("grant internagent_runtime to postgres with set true"))
@@ -82,9 +82,10 @@ def test_sync_records_changes_and_brief_builds_on_them(monkeypatch):
                     connection.execute(text("select set_config('internagent.actor_id',:actor,true)"), {"actor": str(user_id)})
                     yield connection
 
-            from app import ai_control
+            from app import ai_control, attention, progress
             monkeypatch.setattr(deps, "program_connection", scoped)
-            monkeypatch.setattr(ai_control, "program_connection", scoped)
+            for module in (ai_control, attention, progress):
+                monkeypatch.setattr(module, "program_connection", scoped)
             monkeypatch.setitem(app.dependency_overrides, actor_id, lambda: actor)
             monkeypatch.setitem(app.dependency_overrides, planner_provider, lambda: fake)
             with TestClient(app) as client:
@@ -134,5 +135,27 @@ def test_sync_records_changes_and_brief_builds_on_them(monkeypatch):
                 actor = intern  # interns don't see Jira data or manage it
                 assert client.get(f"{base}/{project}/jira").status_code == 403
                 assert client.get(path + "/jira-work").status_code == 403
+                # AI is for staff only: interns can't run the project analysis, attention guidance or progress summaries.
+                assert client.post(f"{base}/{project}/brief").status_code == 403
+                assert client.post(f"/api/organizations/{org}/attention/{internship}/overdue/explain").status_code == 404
+                dates = {"start": "2026-11-01", "end": "2026-11-30"}
+                assert client.post(path + "/progress/summary", params=dates).status_code == 404
+
+                actor = hr  # HR sees every internship and its Jira work, read-only
+                assert [row["id"] for row in client.get(f"/api/organizations/{org}/internships").json()] == [internship]
+                assert client.get(f"{base}/{project}/jira").status_code == 200
+                assert client.get(path + "/jira-work").json()["issues"][0]["key"] == "HR-6"
+                assert client.get(f"/api/organizations/{org}/jira-overview").json()[0]["to_do"] == 1
+                calls = len(fake.prompts)
+                assert client.post(f"{base}/{project}/jira/sync").status_code == 200
+                assert len(fake.prompts) == calls  # HR's sync never runs the AI analysis
+                assert client.post(f"{base}/{project}/brief").status_code == 403
+                assert client.post(path + "/jira-work/assign", json={"issue_key": "HR-3"}).status_code == 403
+                assert client.put(path + "/jira-account", json={"email": None}).status_code == 403
+                assert client.post(base, json={"name": "Not allowed"}).status_code == 403
+                assert client.get(path + "/progress", params=dates).status_code == 200
+                assert client.put(path + "/progress/report", params=dates, json={"summary": "x"}).status_code == 403
+                assert client.post(path + "/plans", json={"title": "x", "goal": "x", "starts_on": "2026-11-23",
+                                                          "ends_on": "2026-11-27", "carry": [], "new_tasks": []}).status_code == 403
         finally:
             tx.rollback()

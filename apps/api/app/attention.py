@@ -47,7 +47,7 @@ def signals(org_id, actor, internship_id=None):
             ) recent on true
             where i.org_id=:org and i.closed_at is null and (cast(:internship as uuid) is null or i.id=:internship)
                 and current_date between i.starts_on and i.ends_on
-                and (m.role='admin' or (m.role='mentor' and i.mentor_id=:actor))
+                and (m.role in ('admin','hr') or (m.role='mentor' and i.mentor_id=:actor))
             order by i.id,t.due_on,t.id
         """), {"org": org_id, "actor": actor, "internship": internship_id,
                  "return_limit": RETURN_LIMIT}).mappings().all()

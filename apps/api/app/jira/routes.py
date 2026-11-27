@@ -52,16 +52,16 @@ def status(c, org_id, project_id) -> dict:
 @router.get("/jira")
 def project_status(org_id: UUID, project_id: UUID, actor: Actor):
     with deps.program_connection(actor, org_id) as c:
-        staff(c, org_id, actor)
+        staff(c, org_id, actor, read=True)
         return status(c, org_id, project_id)
 
 
 @router.post("/jira/sync")
 def sync_board(org_id: UUID, project_id: UUID, actor: Actor,
                provider: Annotated[Provider | None, Depends(metered_provider)], analyse: bool = True):
-    """Syncs the board; when anything changed since the last brief, the AI updates the brief."""
+    """Syncs the board; when anything changed since the last brief, the AI updates the brief (not for HR)."""
     with deps.program_connection(actor, org_id) as c:
-        staff(c, org_id, actor)
+        analyse = analyse and staff(c, org_id, actor, read=True) != "hr"
     result = sync_project(actor, org_id, project_id)
     with deps.program_connection(actor, org_id) as c:
         stale = briefs.changed_since_brief(c, project_id)

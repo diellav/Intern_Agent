@@ -93,7 +93,7 @@ function InternshipHeader({ internship, role, back, children }: {
     <dl className="facts">
       <div><dt>Program</dt><dd>{internship.program_name}</dd></div>
       <div><dt>Project</dt><dd>{internship.project_name ?? <span className="muted">Not linked</span>}</dd></div>
-      {showIntern && role === 'admin' && <div><dt>Mentor</dt><dd>{displayName(internship.mentor_name, internship.mentor_email)}</dd></div>}
+      {showIntern && (role === 'admin' || role === 'hr') && <div><dt>Mentor</dt><dd>{displayName(internship.mentor_name, internship.mentor_email)}</dd></div>}
       <div><dt>Period</dt><dd>{formatDate(internship.starts_on)} – {formatDate(internship.ends_on)}</dd></div>
       <div><dt>Progress</dt><dd>{internship.closed_at ? `Closed ${formatDate(internship.closed_at.slice(0, 10))}` : periodText(internship.starts_on, internship.ends_on)}</dd></div>
     </dl>
@@ -216,7 +216,7 @@ function InternshipPage({ call, orgId, base, internship, role, view, navigate, s
         <span><b>{done}</b> of {total} tasks done</span>
         <Progress done={done} total={total} />
       </div>}
-      {role !== 'intern' && <div className="head-controls">
+      {(role === 'admin' || role === 'mentor') && <div className="head-controls">
         <ProjectPicker call={call} base={base} internship={internship} onChanged={onChanged} />
         <CloseButton call={call} base={base} internship={internship} onChanged={onChanged} />
       </div>}
@@ -228,7 +228,7 @@ function InternshipPage({ call, orgId, base, internship, role, view, navigate, s
       open={event => event.task_id ? go({ section: 'tasks', taskId: event.task_id, version: event.version ?? undefined }) : go({ section: 'plan' })} />
       : section === 'notes' ? <Notes call={call} base={base} internshipId={internship.id} role={role} />
       : section === 'jira' && role !== 'intern' ? <InternJira key={internship.project_id ?? 'none'} call={call} base={base} internshipId={internship.id} role={role}
-        mentor closed={!!internship.closed_at} onProjectNeeded={() => navigate({ tab: 'projects' })} />
+        mentor={role !== 'hr'} closed={!!internship.closed_at} onProjectNeeded={() => navigate({ tab: 'projects' })} />
       : section === 'plan' ? <Plans intern={role === "intern"} call={call} orgId={orgId} path={`${base}/internships/${internship.id}/plans`}
         internLabel={displayName(internship.intern_name, internship.intern_email)}
         starts={internship.starts_on} ends={internship.ends_on} mentor={role === 'mentor' && !internship.closed_at}
@@ -245,7 +245,7 @@ export function Internships({ call, orgId, role, view, navigate, manage = false 
   const list = useResource<Internship[]>(call, base + '/internships' + (view.programId ? `?program_id=${view.programId}` : ''))
   const [assigning, setAssigning] = useState(false)
   const records = list.data
-  const single = role !== 'admin' && records?.length === 1 && !view.programId
+  const single = role !== 'admin' && role !== 'hr' && records?.length === 1 && !view.programId
   // Mentors and interns with one internship go straight to it.
   useEffect(() => {
     if (single && !view.internshipId) navigate({ tab: 'internships', internshipId: records[0].id, section: 'tasks' }, { replace: true })

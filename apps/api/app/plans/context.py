@@ -55,16 +55,6 @@ def collect_context(connection, org_id: UUID, internship_id: UUID, actor: UUID, 
         where internship_id=:id and published_at is not null order by starts_on desc limit 3
     """), {"id": internship_id}).mappings().all()
     notes = shared_notes(connection, internship_id)
-    starting_profile = None
-    if not plans:
-        analysis = connection.execute(text(
-            "select analysis from app.intern_cvs where internship_id=:id"
-        ), {"id": internship_id}).scalar()
-        if isinstance(analysis, dict):
-            starting_profile = {
-                "learn_first": analysis.get("learn_first", [])[:10],
-                "starter_tasks": analysis.get("starter_tasks", [])[:5],
-            }
 
     def task(ref: str, row) -> dict:
         latest = None
@@ -103,7 +93,6 @@ def collect_context(connection, org_id: UUID, internship_id: UUID, actor: UUID, 
             "project": project,
             "requested_plan": requested,
             "planning_stage": "next_period" if plans else "first_plan",
-            "starting_profile": starting_profile,
             "open_tasks": [task(ref, row) for ref, row in open_tasks.items()],
             "completed_tasks": [task(ref, row) for ref, row in done_tasks.items()],
             "recent_published_plans": [{"title": p["title"], "starts_on": p["starts_on"].isoformat(),
